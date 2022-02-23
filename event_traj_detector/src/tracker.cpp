@@ -90,7 +90,7 @@ namespace tracker
 
         eventor_->LoadDepth(depth_estimator_->GetDepth());
         // 就是在这里边进行的更新time_img cnt_img
-        eventor_->main();
+        eventor_->generate();
 
         /* detect objects on compensated images */
         cv::Mat time_image, event_count, small, mask;
@@ -203,6 +203,7 @@ namespace tracker
 
         /* visualize time image */
         Visualize();
+        cv::waitKey(30);
     }
 
     /**

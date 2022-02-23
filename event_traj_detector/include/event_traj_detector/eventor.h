@@ -125,10 +125,11 @@ class Eventor {
   ~Eventor() {}
 
   // void init();
-  void main();
+  void generate();
   void Clear();
-  void AvgIMU_DJI();
-  void AvgIMU_PX4();
+  // void AvgIMU_DJI();
+  // void AvgIMU_PX4();
+  void edgeBlock(const int x, const int y);
 
   void notCompensate(cv::Mat *timeImg, cv::Mat *eventCount);
   void translationalCompensate(cv::Mat *timeImg, cv::Mat *eventCount);

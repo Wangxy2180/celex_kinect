@@ -133,7 +133,7 @@ include
 
 add_executable(${PROJECT_NAME}_node src/detector_node.cpp
 src/tracker.cpp
-src/compensation.cpp
+src/eventor.cpp
 src/obj_detector.cpp
 src/depth_est.cpp
 )
@@ -144,6 +144,7 @@ target_link_libraries(${PROJECT_NAME}_node
     ${OpenCV_LIBRARIES}
 )
 
+#############################################################################################
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
 #   src/${PROJECT_NAME}/event_traj_detector.cpp

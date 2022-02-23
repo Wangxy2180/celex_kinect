@@ -1,4 +1,4 @@
-#include "event_traj_detector/compensation.h"
+#include "event_traj_detector/eventor.h"
 
 #include "ros/ros.h"
 
@@ -6,7 +6,7 @@
  * @brief warp events and utilize motion compensation
  *
  */
-void Eventor::main()
+void Eventor::generate()
 {
     Clear();
 
@@ -184,6 +184,11 @@ void Eventor::notCompensate(cv::Mat *timeImg, cv::Mat *eventCount)
             *q += (deltaT - v) / (*c);
         }
     }
+}
+
+void Eventor::edgeBlock(const int x, const int y)
+{
+
 }
 
 /**

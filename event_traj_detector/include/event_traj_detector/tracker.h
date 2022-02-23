@@ -27,7 +27,7 @@
 /* local headers */
 #include "event_traj_detector/depth_est.h"
 #include "event_traj_detector/ekf_filter.hpp"
-#include "event_traj_detector/compensation.h"
+#include "event_traj_detector/eventor.h"
 #include "event_traj_detector/obj_detector.h"
 // #include "event_traj_detector/velocity_est.h"
 

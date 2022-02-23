@@ -82,6 +82,8 @@ void ObjDetector::MorphologyOperations(cv::Mat *dst) {
 
   /* normalization */
   cv::normalize(time_image_, normed_time_image, 0, 1, cv::NORM_MINMAX);
+  cv::imshow("time",time_image_);
+  cv::imshow("norm time",normed_time_image);
 
   /* thresholding */ //mean函数 mask只有0和1的区别，1就是参与运算，0就是不参与,不是权重
   float thres = cv::mean(normed_time_image, event_counts_)[0] +
