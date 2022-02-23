@@ -1,0 +1,5 @@
+raw_image_topic: "/celex5_mipi/display/in_pixel_img/raw_image"
+event_topic: "/celex5_mipi/events"
+# imu_topic: "/mavros/imu/data"
+depth_topic: "/camera/depth/image_rect_raw"
+# odometry_topic: "/vicon_imu_ekf_odom"
