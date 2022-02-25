@@ -9,20 +9,6 @@
 void Eventor::generate()
 {
     Clear();
-
-    //   /* average imu data */
-    //   if (kIMUType_ == "dji") {
-    //     AvgIMU_DJI();
-    //   } else if (kIMUType_ == "px4") {
-    //     AvgIMU_PX4();
-    //   } else {
-    //     throw std::invalid_argument("IMU type has to be DJI or PX4");
-    //   }
-
-    //   UpdateCam2body();
-    //   UpdateFC2world();
-    //   IMU_buffer_.clear();  // clear the buffer after averaging
-
     // notCompensate(&time_img_, &event_counts_);
     rotationalCompensate(&time_img_, &event_counts_);
     // translationalCompensate(&time_img_, &event_counts_);
@@ -36,23 +22,24 @@ void Eventor::Clear()
 
     time_img_ = cv::Mat::zeros(cv::Size(MAT_COLS, MAT_ROWS), CV_32FC1);
     event_counts_ = cv::Mat::zeros(cv::Size(MAT_COLS, MAT_ROWS), CV_8UC1);
+
+    fill(block_rows.begin(), block_rows.end(), 0);
+    fill(block_cols.begin(), block_cols.end(), 0);
+
+    block_rows_eigen.setZero();
+    block_cols_eigen.setZero();
+
+    // block_rows.clear();
+    // block_cols.clear();
+    // block_rows.resize(MAT_ROWS / BLOCK_SIZE, 0);
+    // block_cols.resize(MAT_COLS / BLOCK_SIZE, 0);
 }
-
-// void MotComp::LoadIMUs(const sensor_msgs::ImuConstPtr &imu) {
-//   IMU_buffer_.push_back(*imu);
-// }
-
-// void MotComp::LoadOdometry(const nav_msgs::Odometry::ConstPtr &odom) {
-//   odoms_buffer_ = *odom;
-// }
 
 void Eventor::LoadEvents(const celex5_msgs::EventVector::ConstPtr &emsg)
 {
     events_buffer_.assign(emsg->events.begin(), emsg->events.end());
     event_size_ = events_buffer_.size();
 }
-
-// void MotComp::SetIMUType(const string &s) { kIMUType_ = s; }
 
 void Eventor::LoadDepth(const cv::Mat &depth) { depth_img_ = depth; }
 
@@ -66,89 +53,6 @@ cv::Mat Eventor::GetVisualization()
     // cv::imshow( "window", m_color);
     // cv::waitKey(0);
     return m_color;
-}
-
-/**
- * @brief average IMU data, and update the average angular velocity
- * This function is only for DJI imu
- * 
- * body frame is x forwards, z upwards
- * 
- * body frame:  x   y   z
- * imu frame :  x   -y  -z
- * 
- */
-// void MotComp::AvgIMU_DJI() {
-//   omega_avg_.setZero();
-//   imu_size_ = IMU_buffer_.size();
-//   if (imu_size_ <= 0) {
-//     omega_ = 0.0f;
-//   } else {
-//     for (int i = (imu_size_ >= 10) ? (imu_size_ - 10) : 0; i < imu_size_; i++) {
-//       omega_avg_[0] += IMU_buffer_[i].angular_velocity.x;
-//       omega_avg_[1] += -IMU_buffer_[i].angular_velocity.y;
-//       omega_avg_[2] += -IMU_buffer_[i].angular_velocity.z;
-//     }
-//     omega_avg_ = omega_avg_ / static_cast<float>(imu_size_);
-//     omega_ = omega_avg_.norm();
-//   }
-// }
-
-// /**
-//  * @brief average IMU data, and update the average angular velocity
-//  * This function is only for PX4 imu via mavros
-//  *
-//  * IMU frame is same as body frame
-//  */
-// void MotComp::AvgIMU_PX4() {
-//   omega_avg_.setZero();
-//   imu_size_ = IMU_buffer_.size();
-//   if (imu_size_ <= 0) {
-//     omega_ = 0.0f;
-//   } else {
-//     for (int i = (imu_size_ >= 10) ? (imu_size_ - 10) : 0; i < imu_size_; i++) {
-//       omega_avg_[0] += IMU_buffer_[i].angular_velocity.x;
-//       omega_avg_[1] += IMU_buffer_[i].angular_velocity.y;
-//       omega_avg_[2] += IMU_buffer_[i].angular_velocity.z;
-//     }
-//     omega_avg_ = omega_avg_ / static_cast<float>(imu_size_);
-//     omega_ = omega_avg_.norm();
-//   }
-// }
-
-/**
- * @brief update fc2world, fc2world is (@botao) The attitude of flight
- * controller corresponds to world frame.
- * @note if not using the frame of flight-controller as body frame, please add
- * external parameters
- * between flight-controller frame and body frame.
- */
-// void MotComp::UpdateFC2world() {  // TODO: dji & px4
-//   Eigen::Quaterniond q;
-//   if (imu_size_ > 1) {
-//     auto imu = IMU_buffer_[imu_size_ - 1];
-//     q.x() = imu.orientation.x;
-//     q.y() = imu.orientation.y;
-//     q.z() = imu.orientation.z;
-//     q.w() = imu.orientation.w;
-//   } else {
-//     // std::cout << "warning " << std::endl;
-//   }
-//   fc2world = Eigen::Isometry3d::Identity();
-//   fc2world.rotate(q);
-// }
-
-/**
- * @brief
- * body frame: x -> front, y -> right, z -> up
- * cam frame: z -> front, x -> right, y -> down
- *
- */
-void Eventor::UpdateCam2body()
-{
-    cam2body = Eigen::Isometry3d::Identity();
-    cam2body.rotate(Eigen::AngleAxisd(-0.5 * M_PI, Eigen::Vector3d::UnitY()));
-    cam2body.rotate(Eigen::AngleAxisd(0.5 * M_PI, Eigen::Vector3d::UnitX()));
 }
 
 /**
@@ -188,94 +92,96 @@ void Eventor::notCompensate(cv::Mat *timeImg, cv::Mat *eventCount)
 
 void Eventor::edgeBlock(const int x, const int y)
 {
+    block_rows[y / BLOCK_SIZE] += 1;
+    block_cols[x / BLOCK_SIZE] += 1;
 
+    block_rows_eigen[y / BLOCK_SIZE] += 1;
+    block_cols_eigen[x / BLOCK_SIZE] += 1;
+
+    // cout<<"x,y:"<<x<<","<<y<<endl;
+
+    // if(y/BLOCK_SIZE == 7)cout<<"888<"<<block_rows[7]<<endl;
 }
 
-/**
- * @brief rotational motion compensation
- * The function is used to compensate the rotational ego-motion.
- * We use the integral of angular velocity to represent the change of attitude,
- * which can be represent as "rotation_vector = omega_avg_*deltaT". For
- * computational efficiency,
- * we discretely compute the attitude change "rotation_vector" every 1ms.
- * Then we move each event (x, y) to (x', y') according to its rotational matrix
- * "rotation_matrix_"
- * and record all timestamps of events that have been moved to the same
- * location.
- * Finally, we use the average timestamp of events that moved to the same
- * location as the value(mean-timestamp) of this pixel.
- * @param timeImg
- */
+void Eventor::getEdgeBlock(Eigen::Array<int, MAT_ROWS/BLOCK_SIZE, 1>& rowVar,
+    Eigen::Array<int, MAT_COLS/BLOCK_SIZE, 1>& colVar)
+{
+    // rowBlock.assign(block_rows.begin(), block_rows.end());
+    // colBlock.assign(block_cols.begin(), block_cols.end());
+    rowVar=block_rows_eigen;
+    colVar=block_cols_eigen;
+
+
+    // float col_variance = (block_cols_eigen.mean() - block_cols_eigen).square().sum() / (MAT_COLS / BLOCK_SIZE);
+    // float row_variance = (block_rows_eigen.mean() - block_rows_eigen).square().sum() / (MAT_ROWS / BLOCK_SIZE);
+
+    // rowVar=row_variance;
+    // colVar=col_variance;
+
+    // if(row_variance>1500 && col_variance>1500)
+    // {
+        
+    // }
+
+    // double sum1 = std::accumulate(rowBlock.begin(), rowBlock.end(), 0.0);
+    // double mean1 = sum1 / rowBlock.size(); //均
+    // double ret_sum1 = 0;
+    // for (auto kk : rowBlock)
+    // {
+    //     ret_sum1 += (mean1 - kk) * (mean1 - kk);
+    // }
+    // double vrow = ret_sum1 / rowBlock.size();
+
+    // double sum2 = std::accumulate(colBlock.begin(), colBlock.end(), 0.0);
+    // double mean2 = sum2 / colBlock.size(); //均
+    // double ret_sum2 = 0;
+    // for (auto kk : colBlock)
+    // {
+    //     ret_sum2 += (mean2 - kk) * (mean2 - kk);
+    // }
+    // double vcol = ret_sum2 / colBlock.size();
+
+    // cout <<">>>"<< col_variance << "," << row_variance << endl
+    //      <<"<<<"<< vcol << "," << vrow << endl;
+    // cout << "--------------" << endl;
+}
+
 void Eventor::rotationalCompensate(cv::Mat *timeImg, cv::Mat *eventCount)
 {
-    // Eigen::Vector3f rotation_vector;
-    // Eigen::Matrix3f rot_K;
-    // Eigen::Vector3f eventVec;
-    // Eigen::Matrix3f rot_skew_mat;
-
     //   寻找min时间
     celex5_msgs::Event oldestEvent = *min_element(events_buffer_.begin(), events_buffer_.end(), [](celex5_msgs::Event &a, celex5_msgs::Event &b)
                                                   { return a.in_pixel_timestamp < b.in_pixel_timestamp; });
     auto t0 = oldestEvent.in_pixel_timestamp;
     //   auto t0 = events_buffer_[0].in_pixel_timestamp;
-    float prevDeltaT = 0.0f;
-    // 这里对事件生成时间图遍历进行IMU补偿吗？
+
     for (int i = 0; i < event_size_; i++)
     {
         celex5_msgs::Event e = events_buffer_[i];
         // float deltaT = (e.in_pixel_timestamp - t0).toSec();
         // 单位是秒
         float deltaT = (e.in_pixel_timestamp - t0) / 1000000;
-        // eventVec.setZero();
-        // rot_skew_mat.setZero();
 
-        // /* prepare rotation matrix */
-        // if (deltaT - prevDeltaT > 1e-3)
-        // { // update rot_K every millisecond
-        //     prevDeltaT = deltaT;
-        //     // rotation_vector = omega_avg_ * deltaT;
-        //     // rot_skew_mat = vectorToSkewMat(rotation_vector);
-        //     // rotation_matrix_ = rot_skew_mat.exp();                // vector space to Lee spin space
-        //     // rot_K = K * rotation_matrix_.transpose() * K_inverse; // projection
-        // }
-
-        /* prepare event vector */
-        // eventVec[0] = e.x;
-        // eventVec[1] = e.y;
-        // eventVec[2] = 1;
-        // eventVec = rot_K * eventVec; // event warp
-        // 转换到同样的尺度上
-        // ConvertToHomogeneous(&eventVec);
-        // cout << "x " << eventVec[0] << " y " << eventVec[1] << " z " <<
-        // eventVec[2] << endl;
-        // 这里没看懂啊，尺度不对啊
-        // int ix = static_cast<int>(eventVec[0]);
-        // int iy = static_cast<int>(eventVec[1]);
-
-        int ix = static_cast<int>(e.x);
-        int iy = static_cast<int>(e.y);
+        // 这里要注意，celex数据xy是反的，x最大800，y最大1280
+        int ix = static_cast<int>(e.y);
+        int iy = static_cast<int>(MAT_ROWS - e.x);
+        // cout<<"x,y"<<ix<<","<<iy<<endl;
 
         if (IsWithinTheBoundary(ix, iy))
         {
+            // 计算落在那个block中
+            edgeBlock(ix, iy);
             // 更新两张图
-            // cnt图就加一就行了
             int *c = eventCount->ptr<int>(iy, ix);
             *c += 1;
 
-            // time_img没看懂咋计算的呢？
+            // 平均time_img
             float *q = timeImg->ptr<float>(iy, ix);
             float v = *q;
             *q += (deltaT - v) / (*c);
-
-            // eventCount->at<uchar>(iy, ix) += 1;
-            // float q = time_img_.at<float>(iy, ix);
-            // timeImg->at<float>(iy, ix) +=
-            //     (deltaT - q) / eventCount->at<uchar>(iy, ix);
-            // timeSumImg.at<float>(iy, ix) += deltaT;
         }
     }
-
-    // cv::divide(timeSumImg, event_counts_, time_img_, 1.0f, CV_32FC1);
+    // cout << "--block_rows:" << block_rows.size() << "," << block_rows[8] << endl;
+    // cout << "--block_cols:" << block_cols.size() << "," << block_cols[8] << endl;
 
     ///////////// to debug ////////////////////////
     // double maxValue;
@@ -287,190 +193,38 @@ void Eventor::rotationalCompensate(cv::Mat *timeImg, cv::Mat *eventCount)
     //////////////////////////////////////////////
 }
 
-/**
- * @brief translational motion-compensation
- *
- * Finally, we re-project each pixel to event camera's frame and use the average
- * timestamp
- * of events with same coordinate as the value(mean-timestamp) of this pixel.
- * @param timeImg
- */
-// void MotComp::translationalCompensate(cv::Mat *timeImg, cv::Mat *eventCount) {
-//   Point MaxLoc;
-//   double maxTime;
-//   cv::Mat TMat = *timeImg;
+bool Eventor::updateEventWindow(int dataSize)
+{
+    // 这个值可以考虑修改一下
+    if (dataSize < event_init_threshold_)
+        return false;
+    if (dataSize == env_window_(envWindowSize - 1))
+        return false;
+    env_window_.topRows<envWindowSize - 1>() = env_window_.bottomRows<envWindowSize - 1>();
+    env_window_(env_window_.size() - 1) = dataSize;
+    // 这里改成了11个大小的，其中前10个用来计算阈值，第11个是最新的
+    // dynamic_threshold_=((env_window_.sum()-env_window_(envWindowSize-1))/(env_window_.size()-1))*dynamic_threshold_scale_;
+    dynamic_threshold_ = (env_window_.topRows<envWindowSize - 1>().sum() / (env_window_.size() - 1)) * dynamic_threshold_scale_;
+    return true;
+}
 
-//   minMaxLoc(TMat, NULL, &maxTime, NULL, NULL);
-//   int maxTS = static_cast<int>(maxTime * 1000 + 1);
+bool Eventor::initComplete()
+{
+    // 根据第一窗口数值判断是否完成初始化
+    if (env_window_(0) == 0)
+        return false;
+    return true;
+}
 
-//   ////////// debug /////////
-//   // std::cout << "Value at MaxLoc: " << TMat.at<float>(MaxLoc.y, MaxLoc.x)
-//   // << std::endl;
-//   //  cout << "maxTS:" << maxTS << std::endl;
-//   // might have format problems like float->double, use this line to check
-//   // it.
-//   //////////////////////////
-
-//   /* Get the max timestamp in timeImg and round up for discretely computing the
-//    * translational matrix.
-//    */
-//   std::vector<Isometry3d> trans_vector;
-//   trans_vector.resize(maxTS);
-
-//   for (int i = 0; i < maxTS; i++) {
-//     trans_body = Eigen::Isometry3d::Identity();
-//     trans_body.pretranslate(Eigen::Vector3d(
-//         odoms_buffer_.twist.twist.linear.x * static_cast<double>(i),
-//         odoms_buffer_.twist.twist.linear.y * static_cast<double>(i),
-//         odoms_buffer_.twist.twist.linear.z * static_cast<double>(i)));
-//     trans_vector[i] = cam2body.inverse() * fc2world.inverse() * trans_body *
-//                       fc2world * cam2body;
-//   }
-
-//   cv::Mat eventCount_new =
-//       cv::Mat::zeros(cv::Size(MAT_COLS, MAT_ROWS), CV_8UC1);
-//   cv::Mat TMat_new = cv::Mat::zeros(cv::Size(MAT_COLS, MAT_ROWS), CV_32FC1);
-
-//   for (int i = 0; i < MAT_COLS; i++) {
-//     for (int j = 0; j < MAT_ROWS; j++) {
-//       /* read timestamp from TMat */
-//       int counts = eventCount->at<uchar>(j, i);
-//       float deltaT = timeImg->at<float>(j, i);
-
-//       if (deltaT > 0.001 && deltaT < 1) {
-//         Eigen::Vector3f eventVec;
-//         eventVec[0] = i;
-//         eventVec[1] = j;
-//         eventVec[2] = 1;
-
-//         if (IsDepthInRange(depth_img_, i, j, 300, 10000)) {
-//           /* read depth from depth image */
-//           double z_depth = ReadDepth(depth_img_, i, j);
-//           /* update event vector */
-//           eventVec = K_inverse * eventVec * z_depth;
-//           Eigen::Vector4d depthInCam = {eventVec[0], eventVec[1], eventVec[2],
-//                                         1};
-
-//           int millisecond = static_cast<int>(1000.f * deltaT);
-//           depthInCam = trans_vector[millisecond] * depthInCam;
-
-//           eventVec[0] = static_cast<float>(depthInCam[0]);
-//           eventVec[1] = static_cast<float>(depthInCam[1]);
-//           eventVec[2] = static_cast<float>(depthInCam[2]);
-//           eventVec = static_cast<float>(1.0f / z_depth) * K * eventVec;
-//         }
-
-//         int iy = static_cast<int>(eventVec[1]);
-//         int ix = static_cast<int>(eventVec[0]);
-
-//         if (IsWithinTheBoundary(ix, iy)) {
-//           int *ec = eventCount_new.ptr<int>(iy, ix);
-//           float *tm = TMat_new.ptr<float>(iy, ix);
-//           *ec += 1;
-//           float v = *tm;
-//           *tm += (deltaT - v) / (*ec);
-//         }
-//       }
-//     }
-//   }
-
-//   *eventCount = eventCount_new;
-//   *timeImg = TMat_new;
-
-//   ///////////// to debug ////////////////////////
-//   // double maxValue;
-//   // maxValue = *max_element(timeImg->begin<float>(), timeImg->end<float>());
-//   // std::cout << "time image max " << maxValue << std::endl;
-//   // maxValue = *max_element(eventCount->begin<uchar>(),
-//   // eventCount->end<uchar>()); std::cout << "event count max " << maxValue <<
-//   // std::endl; GetVisualization();
-//   //////////////////////////////////////////////
-// }
-
-/**
- * @brief rotational and translational compensation in a single function
- *
- * deprecated
- *
- * @param timeImg
- * @param eventCount
- */
-// void MotComp::RotTransCompensate(cv::Mat *timeImg, cv::Mat *eventCount) {
-//   cv::Mat T = *timeImg;
-//   cv::Mat C = *eventCount;
-//   cv::Mat timeSumImg = cv::Mat::zeros(cv::Size(MAT_COLS, MAT_ROWS), CV_32FC1);
-//   Eigen::Vector3f rotation_vector;
-//   Eigen::Matrix3f rot_K;
-//   Eigen::Vector3f eventVec;
-//   Eigen::Matrix3f rot_skew_mat;
-
-//   auto t0 = events_buffer_[0].ts;
-//   float prevDeltaT = 0.0f;
-
-//   std::vector<Isometry3d> trans_vector;
-//   for (int i = 0; i < 50; i++) {
-//     trans_body = Eigen::Isometry3d::Identity();
-//     trans_body.pretranslate(Eigen::Vector3d(
-//         -odoms_buffer_.twist.twist.linear.x * static_cast<double>(i),
-//         -odoms_buffer_.twist.twist.linear.y * static_cast<double>(i),
-//         -odoms_buffer_.twist.twist.linear.z * static_cast<double>(i)));
-//     trans_vector[i] = cam2body.inverse() * fc2world.inverse() * trans_body *
-//                       fc2world * cam2body;
-//   }
-
-//   for (int j = 0; j < event_size_; j++) {
-//     dvs_msgs::Event *e = &events_buffer_[j];
-//     float deltaT = (e->ts - t0).toSec();
-
-//     if (deltaT - prevDeltaT > 1e-3) {
-//       prevDeltaT = deltaT;
-//       rotation_vector = omega_avg_ * deltaT;
-
-//       rot_skew_mat = vectorToSkewMat(rotation_vector);
-//       rotation_matrix_ = rot_skew_mat.exp();  // vector space to Lee spin space
-
-//       rot_K = K * rotation_matrix_.transpose() * K_inverse;  // projection
-//     }
-
-//     /* prepare event vector */
-//     eventVec[0] = e->x;
-//     eventVec[1] = e->y;
-//     eventVec[2] = 1;
-//     eventVec = rot_K * eventVec;  // event warp
-
-//     ConvertToHomogeneous(&eventVec);
-
-//     int ix = static_cast<int>(eventVec[0]);
-//     int iy = static_cast<int>(eventVec[1]);
-
-//     if (IsWithinTheBoundary(ix, iy)) {
-//       if (IsDepthInRange(depth_img_, ix, iy, 500, 10000)) {
-//         double z_depth = ReadDepth(depth_img_, ix, iy);
-//         eventVec = K_inverse * eventVec * z_depth;
-
-//         Eigen::Vector4d depthInCam = {eventVec[0], eventVec[1], eventVec[2], 1};
-
-//         int millisecond = static_cast<int>(1000.f * deltaT);
-//         depthInCam = trans_vector[millisecond] * depthInCam;
-
-//         eventVec[0] = static_cast<float>(depthInCam[0]);
-//         eventVec[1] = static_cast<float>(depthInCam[1]);
-//         eventVec[2] = static_cast<float>(depthInCam[2]);
-//         eventVec = static_cast<float>(1.0f / z_depth) * K * eventVec;
-//       }
-//     }
-
-//     int ny = static_cast<int>(eventVec[1]);
-//     int nx = static_cast<int>(eventVec[0]);
-
-//     if (IsWithinTheBoundary(nx, ny)) {
-//       C.at<uchar>(ny, nx) += 1;
-//       timeSumImg.at<float>(ny, nx) += deltaT;
-//     }
-//   }
-
-//   cv::divide(timeSumImg, C, T, 1.0, CV_32FC1);
-// }
+bool Eventor::objAppear()
+{
+    // 事件数量超出阈值，目标出现，可以进行下一步检测动作
+    if (env_window_(envWindowSize - 1) > dynamic_threshold_)
+    {
+        cout << "===" << dynamic_threshold_ << endl;
+        return true;
+    }
+}
 
 /**
  * @brief read depth value from the depth image
@@ -494,17 +248,17 @@ inline double Eventor::ReadDepth(const cv::Mat &I, const int &x, const int &y)
                  (y - K(1, 2)) * (y - K(1, 2)) / (K(1, 1) * K(1, 1))));
 }
 
-/**
- * @brief convert a vector to homogeneous coordinates
- *
- * @param v
- */
-inline void Eventor::ConvertToHomogeneous(Eigen::Vector3f *v)
-{
-    (*v)[0] = (*v)[0] / (*v)[2];
-    (*v)[1] = (*v)[1] / (*v)[2];
-    (*v)[2] = 1;
-}
+// /**
+//  * @brief convert a vector to homogeneous coordinates
+//  *
+//  * @param v
+//  */
+// inline void Eventor::ConvertToHomogeneous(Eigen::Vector3f *v)
+// {
+//     (*v)[0] = (*v)[0] / (*v)[2];
+//     (*v)[1] = (*v)[1] / (*v)[2];
+//     (*v)[2] = 1;
+// }
 
 /**
  * @brief check if this event in the bounds

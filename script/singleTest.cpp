@@ -47,6 +47,24 @@ void copy_assign()
         b = a;
     }
     cout << b[1] << endl;
+
+    vector<int> c;
+    for(int i = 0;i<3;++i)
+    {
+        vector<int> a{1, 2, 3, 4, 5};
+        b.assign(a.begin(),a.end());
+    }
+    cout<<b.size()<<endl;
+}
+
+void clear_test()
+{
+    vector<int> aa;
+    cout<<"1:"<<aa.size()<<endl;
+    aa.resize(10);
+    cout<<"2:"<<aa.size()<<endl;
+    fill(aa.begin(), aa.end(), 0);
+    cout<<"3:"<<aa.size()<<endl;
 }
 
 int main()
@@ -54,4 +72,5 @@ int main()
     // default_val();
     // min_ele_lam();
     copy_assign();
+    // clear_test();
 }

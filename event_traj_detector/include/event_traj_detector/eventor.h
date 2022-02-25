@@ -13,6 +13,8 @@
 #include <vector>
 #include <cmath>
 #include <opencv2/opencv.hpp>
+#include <algorithm>
+#include <numeric>
 
 // #include "dvs_msgs/Event.h"
 // #include "dvs_msgs/EventArray.h"
@@ -22,7 +24,8 @@
 
 /* GLOBAL DEFINES */
 #define MAT_ROWS 800  // 240  //800
-#define MAT_COLS 1280  // 346  //1280
+#define MAT_COLS 1280 // 346  //1280
+#define BLOCK_SIZE 80
 
 using std::vector;
 using namespace std;
@@ -40,12 +43,13 @@ using Mat3 = typename Eigen::Matrix<T, 3, 3>;
  * @return Mat3<typename T::Scalar>
  */
 template <typename T>
-Mat3<typename T::Scalar> vectorToSkewMat(const Eigen::MatrixBase<T> &v) {
-  static_assert(T::ColsAtCompileTime == 1 && T::RowsAtCompileTime == 3,
-                "Must have 3x1 matrix");
-  Mat3<typename T::Scalar> m;
-  m << 0, -v[2], v[1], v[2], 0, -v[0], -v[1], v[0], 0;
-  return m;
+Mat3<typename T::Scalar> vectorToSkewMat(const Eigen::MatrixBase<T> &v)
+{
+    static_assert(T::ColsAtCompileTime == 1 && T::RowsAtCompileTime == 3,
+                  "Must have 3x1 matrix");
+    Mat3<typename T::Scalar> m;
+    m << 0, -v[2], v[1], v[2], 0, -v[0], -v[1], v[0], 0;
+    return m;
 }
 
 /**
@@ -56,101 +60,131 @@ Mat3<typename T::Scalar> vectorToSkewMat(const Eigen::MatrixBase<T> &v) {
  * @return T
  */
 template <typename T>
-T pow2(const T &x) {
-  return x * x;
+T pow2(const T &x)
+{
+    return x * x;
 }
 
-class Eventor {
- private:
-  /* flags */
-  enum ConvolutionType { CONVOLUTION_FULL, CONVOLUTION_VALID };
-  string kIMUType_;
+class Eventor
+{
+private:
+    /* flags */
+    enum ConvolutionType
+    {
+        CONVOLUTION_FULL,
+        CONVOLUTION_VALID
+    };
+    string kIMUType_;
 
-  /* parameters */
-  Eigen::Matrix3f K;  // intrinstic matrix
-  Eigen::Matrix3f K_inverse;
+    /* parameters */
+    Eigen::Matrix3f K; // intrinstic matrix
+    Eigen::Matrix3f K_inverse;
 
-  /* data */
-//   vector<sensor_msgs::Imu> IMU_buffer_;
-  vector<celex5_msgs::Event> events_buffer_;
+    /* data */
+    //   vector<sensor_msgs::Imu> IMU_buffer_;
+    vector<celex5_msgs::Event> events_buffer_;
 
-//   nav_msgs::Odometry odoms_buffer_;
-  cv::Mat depth_img_;
+    //   nav_msgs::Odometry odoms_buffer_;
+    cv::Mat depth_img_;
 
-  // std::vector<Isometry3d> trans_vector;
+    // std::vector<Isometry3d> trans_vector;
 
-  /* image outputs */
-  cv::Mat time_img_;      // mean-time graph
-  cv::Mat event_counts_;  // counts for event in each pixel
-  cv::Mat color_img_;
+    /* image outputs */
+    cv::Mat time_img_;     // mean-time graph
+    cv::Mat event_counts_; // counts for event in each pixel
+    cv::Mat color_img_;
 
-  /* utilities */
-  Eigen::Matrix3f rotation_matrix_;
-  // Eigen::Matrix3f rot_K;
+    static const int envWindowSize = 11;
+    Eigen::Array<int, envWindowSize, 1> env_window_;
+    float dynamic_threshold_scale_ = 1.25;
+    int dynamic_threshold_ = -1;
+    // 纯静态环境噪声数量
+    int event_init_threshold_ = 240;
 
-  // Eigen::Vector3f
-//   Eigen::Vector3f omega_avg_;  // angular velocity (vector)
-  float omega_ = 15;           // angular velocity (scalar)
+    /* utilities */
+    // Eigen::Matrix3f rotation_matrix_;
+    // Eigen::Matrix3f rot_K;
 
-  Eigen::Isometry3d trans_body = Eigen::Isometry3d::Identity();
-  Eigen::Isometry3d fc2world = Eigen::Isometry3d::Identity();
-  Eigen::Isometry3d cam2body = Eigen::Isometry3d::Identity();
+    // Eigen::Vector3f
+    //   Eigen::Vector3f omega_avg_;  // angular velocity (vector)
+    // float omega_ = 15;           // angular velocity (scalar)
 
-  int event_size_ = 0;
-  int imu_size_ = 0;
+    // Eigen::Isometry3d trans_body = Eigen::Isometry3d::Identity();
+    // Eigen::Isometry3d fc2world = Eigen::Isometry3d::Identity();
+    // Eigen::Isometry3d cam2body = Eigen::Isometry3d::Identity();
 
-  float deltaT = 0.0f;
-  float prevDeltaT = 0.0f;
+    int event_size_ = 0;
+    // int imu_size_ = 0;
 
-  /* helper functions */
-  void UpdateFC2world();
-  void UpdateCam2body();
+    // float deltaT = 0.0f;
+    // float prevDeltaT = 0.0f;
 
-  /* inline functions */
-  inline double ReadDepth(const cv::Mat &I, const int &x, const int &y);
-  inline void ConvertToHomogeneous(Eigen::Vector3f *v);
-  inline bool IsWithinTheBoundary(const Eigen::Vector3f &v);
-  inline bool IsWithinTheBoundary(const int &x, const int &y);
-  inline bool IsDepthInRange(const cv::Mat &depthImg, const int &x,
-                             const int &y, int min, int max);
+    // /* helper functions */
+    // void UpdateFC2world();
+    // void UpdateCam2body();
 
- public:
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  Eventor() {
-    K << 5.3633325932983780e+02, 0, 3.2090009280822994e+02, 0,
-        5.3631797700847164e+02, 2.3404853514480661e+02, 0, 0, 1;
-    K_inverse = K.inverse();
-  }
+    vector<int> block_rows;
+    vector<int> block_cols;
 
-  ~Eventor() {}
+    Eigen::Array<int, MAT_ROWS / BLOCK_SIZE, 1> block_rows_eigen;
+    Eigen::Array<int, MAT_COLS / BLOCK_SIZE, 1> block_cols_eigen;
 
-  // void init();
-  void generate();
-  void Clear();
-  // void AvgIMU_DJI();
-  // void AvgIMU_PX4();
-  void edgeBlock(const int x, const int y);
+    /* inline functions */
+    inline double ReadDepth(const cv::Mat &I, const int &x, const int &y);
+    // inline void ConvertToHomogeneous(Eigen::Vector3f *v);
+    inline bool IsWithinTheBoundary(const Eigen::Vector3f &v);
+    inline bool IsWithinTheBoundary(const int &x, const int &y);
+    inline bool IsDepthInRange(const cv::Mat &depthImg, const int &x,
+                               const int &y, int min, int max);
 
-  void notCompensate(cv::Mat *timeImg, cv::Mat *eventCount);
-  void translationalCompensate(cv::Mat *timeImg, cv::Mat *eventCount);
-  void rotationalCompensate(cv::Mat *timeImg, cv::Mat *eventCount);
-  void RotTransCompensate(cv::Mat *timeImg, cv::Mat *eventCount);
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    Eventor()
+    {
+        K << 5.3633325932983780e+02, 0, 3.2090009280822994e+02, 0,
+            5.3631797700847164e+02, 2.3404853514480661e+02, 0, 0, 1;
+        K_inverse = K.inverse();
 
-  /* helper functions */
-//   void LoadIMUs(const sensor_msgs::ImuConstPtr &imu);
-  void LoadEvents(const celex5_msgs::EventVector::ConstPtr &emsg);
-  void LoadOdometry(const nav_msgs::Odometry::ConstPtr &odom);
-  void LoadDepth(const cv::Mat &depth);
-  void SetIMUType(const string &s);
-  cv::Mat GetTimeImage(void) { return time_img_; }
-  cv::Mat GetEventCount(void) { return event_counts_; }
-  cv::Mat GetVisualization(void);
+        block_rows.resize(MAT_ROWS / BLOCK_SIZE, 0);
+        block_cols.resize(MAT_COLS / BLOCK_SIZE, 0);
 
-  /* Ptr */
-  typedef std::unique_ptr<Eventor> Ptr;
+        block_cols_eigen.setZero();
+        block_rows_eigen.setZero();
+
+        env_window_.setZero();
+    }
+
+    ~Eventor() {}
+
+    bool updateEventWindow(int dataSize);
+    bool initComplete();
+    bool objAppear();
+    // void init();
+    void generate();
+    void Clear();
+    void edgeBlock(const int x, const int y);
+    void getEdgeBlock(Eigen::Array<int, MAT_ROWS / BLOCK_SIZE, 1> &rowVar,
+                          Eigen::Array<int, MAT_COLS / BLOCK_SIZE, 1> &colVar);
+
+    void notCompensate(cv::Mat *timeImg, cv::Mat *eventCount);
+    void translationalCompensate(cv::Mat *timeImg, cv::Mat *eventCount);
+    void rotationalCompensate(cv::Mat *timeImg, cv::Mat *eventCount);
+    void RotTransCompensate(cv::Mat *timeImg, cv::Mat *eventCount);
+
+    /* helper functions */
+    //   void LoadIMUs(const sensor_msgs::ImuConstPtr &imu);
+    void LoadEvents(const celex5_msgs::EventVector::ConstPtr &emsg);
+    void LoadOdometry(const nav_msgs::Odometry::ConstPtr &odom);
+    void LoadDepth(const cv::Mat &depth);
+    void SetIMUType(const string &s);
+    cv::Mat GetTimeImage(void) { return time_img_; }
+    cv::Mat GetEventCount(void) { return event_counts_; }
+    cv::Mat GetVisualization(void);
+
+    /* Ptr */
+    typedef std::unique_ptr<Eventor> Ptr;
 
     vector<celex5_msgs::Event> events_bufferssss;
-
 };
 
-#endif  // DETECTOR_COMP_H_
+#endif // DETECTOR_COMP_H_

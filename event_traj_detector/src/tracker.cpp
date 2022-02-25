@@ -19,7 +19,7 @@ namespace tracker
         image_transport::ImageTransport it_depth_rst(nh_);
         image_transport::ImageTransport it_img_mid(nh_); // time image
 
-          eventor_.reset(new Eventor);
+        eventor_.reset(new Eventor);
         //   motion_compensation_->SetIMUType(k_imu_type_);
         depth_estimator_.reset(new DepthEst);
         //   velocity_est_.reset(new VelocityEst);
@@ -81,11 +81,18 @@ namespace tracker
     void TrackSingleObj::EventsCallback(
         const celex5_msgs::EventVector::ConstPtr &emsg)
     {
+        // 做环境阈值工作
+        // eventor_->updateEventWindow(emsg->events.size());
+        // if (!eventor_->initComplete())
+        //     return;
+        // if (!eventor_->objAppear())
+        //     return;
+
         static int obj_count = 0;
         event_count_times_++;
 
         /* motion compensate input events */
-        // 将事件信息拷贝到这补偿类中
+        // 将事件信息拷贝到这event类中
         eventor_->LoadEvents(emsg);
 
         eventor_->LoadDepth(depth_estimator_->GetDepth());
@@ -98,7 +105,17 @@ namespace tracker
         event_count = eventor_->GetEventCount();
 
         obj_detector_->LoadImages(event_count, time_image);
-        obj_detector_->Detect();
+        // time detect
+        // obj_detector_->Detect();
+
+        ///////////////////////////////////////////
+        // float rowVar, colVar;
+        Eigen::Array<int, MAT_ROWS / BLOCK_SIZE, 1> rowBlock;
+        Eigen::Array<int, MAT_COLS / BLOCK_SIZE, 1> colBlock;
+
+        eventor_->getEdgeBlock(rowBlock, colBlock);
+        obj_detector_->LoadEdge(rowBlock, colBlock);
+        obj_detector_->edgeDetect();
 
         // 这里顺序不大对啊，应该先判断再获取max_rect
         cv::Rect max_rect = obj_detector_->GetDetectRsts();

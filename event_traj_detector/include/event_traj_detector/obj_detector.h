@@ -15,34 +15,45 @@
 
 /* GLOBAL DEFINES */
 #define MAT_ROWS 800  // 240  //800
-#define MAT_COLS 1280  // 346  //1280
+#define MAT_COLS 1280 // 346  //1280
+
+#define BLOCK_SIZE 80
 
 // using namespace cv;
-// using namespace std;
+using namespace std;
 
-class ObjDetector {
- private:
+class ObjDetector
+{
+private:
   /* flags */
   bool is_object_;
 
   /* parameters */
-  const int k_rect_kernel_size_ = 3;  // repackage these three lines
-  const float k_a_th_ = 0.2;          // using node.getParam
+  const int k_rect_kernel_size_ = 3; // repackage these three lines
+  const float k_a_th_ = 0.2;         // using node.getParam
   const float k_b_th_ = -0.1;
   const float k_omega_ = 15;
   const double k_ratio_thres_ = 3.0;
   const float k_min_area_ =
-      45;  // the minimum area size to be recognized as object
+      45; // the minimum area size to be recognized as object
 
   /* images */
-  cv::Mat event_counts_;     // CV_8UC1
-  cv::Mat time_image_;       //  CV_32FC1
-  cv::Mat processed_image_;  // init, CV_32FC1
-  cv::Mat gray_image_;       // CV_8UC1
+  cv::Mat event_counts_;    // CV_8UC1
+  cv::Mat time_image_;      //  CV_32FC1
+  cv::Mat processed_image_; // init, CV_32FC1
+  cv::Mat gray_image_;      // CV_8UC1
   cv::Mat iter_mat_;
+
+  cv::Mat test_mat;
 
   // cv::Rect ori_rect;
   cv::Rect last_rect_;
+
+  // vector<int> block_rows;
+  // vector<int> block_cols;
+
+  Eigen::Array<int, MAT_ROWS / BLOCK_SIZE, 1> block_rows;
+  Eigen::Array<int, MAT_COLS / BLOCK_SIZE, 1> block_cols;
 
   /* utilities */
 
@@ -63,23 +74,32 @@ class ObjDetector {
   inline void GetVariance(const cv::Mat m, double *var);
   inline bool IsTrue(const cv::Rect &src, const cv::Rect &src2,
                      const double &rx, const double &ry,
-                     const double &thres);  // TODO: rename this
+                     const double &thres); // TODO: rename this
 
- public:
-  ObjDetector() {
+public:
+  ObjDetector()
+  {
     processed_image_ = cv::Mat::zeros(cv::Size(MAT_COLS, MAT_ROWS), CV_8UC1);
     gray_image_ = cv::Mat::zeros(cv::Size(MAT_COLS, MAT_ROWS), CV_8UC1);
+    test_mat = cv::Mat::zeros(cv::Size(MAT_COLS, MAT_ROWS), CV_8UC1);
+
+    block_rows.setZero();
+    block_cols.setZero();
   }
   ~ObjDetector() {}
 
   void Detect();
   void LoadImages(const cv::Mat &event_counts, const cv::Mat &time_image);
   cv::Rect GetDetectRsts(void) { return last_rect_; }
-  bool ObjDetected(void) {return is_object_; }
-  bool ObjMissed(void) {return !is_object_;}
+  bool ObjDetected(void) { return is_object_; }
+  bool ObjMissed(void) { return !is_object_; }
   cv::Mat GetVisualization(void);
+
+  void edgeDetect();
+  void LoadEdge(const Eigen::Array<int, MAT_ROWS / BLOCK_SIZE, 1> &rowVar,
+                const Eigen::Array<int, MAT_COLS / BLOCK_SIZE, 1> &colVar);
 
   typedef std::unique_ptr<ObjDetector> Ptr;
 };
 
-#endif  // DETECTOR_OBJDETECT_H_
+#endif // DETECTOR_OBJDETECT_H_
