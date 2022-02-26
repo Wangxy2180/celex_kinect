@@ -1,5 +1,5 @@
 #include "event_traj_detector/obj_detector.h"
-
+#include "timer.h"
 /**
  * @brief read data for detection object
  * @param event_counts
@@ -77,31 +77,184 @@ void ObjDetector::Detect()
     }
 }
 
-void ObjDetector::edgeDetect()
+void ObjDetector::getBlockCenPoint(int &x_idx, int &y_idx)
 {
 
+    Eigen::MatrixXd::Index rowMaxIdx, colMaxIdx;
+    int rowMaxVal = block_rows.maxCoeff(&rowMaxIdx);
+    int colMaxVal = block_cols.maxCoeff(&colMaxIdx);
+    x_idx = colMaxIdx;
+    y_idx = rowMaxIdx;
+
+    // 他一定不会越界的
+    // x_idx = colMaxIdx * BLOCK_SIZE + BLOCK_SIZE / 2;
+    // y_idx = rowMaxIdx * BLOCK_SIZE + BLOCK_SIZE / 2;
+}
+
+bool ObjDetector::isObjAppear(int &rowMaxIdx, int &colMaxIdx)
+{
+    // 判断是否出现物体，同时获取事件量最大的block的idx
     float col_variance = (block_cols.mean() - block_cols).square().sum() / (MAT_COLS / BLOCK_SIZE);
     float row_variance = (block_rows.mean() - block_rows).square().sum() / (MAT_ROWS / BLOCK_SIZE);
+
+    // int rowMaxIdx, colMaxIdx;
+    getBlockCenPoint(colMaxIdx, rowMaxIdx);
+    // cout << "----" << colMaxIdx << "," << rowMaxIdx << endl;
+
     if (col_variance > 1000 && row_variance > 1000)
     {
-        // cout<<"block_rows:"<<block_rows.size()<<","<<block_rows[8]<<endl;
-        // cout<<"block_cols:"<<block_cols.size()<<","<<block_cols[8]<<endl;
-
-        Eigen::MatrixXd::Index rowMaxIdx, colMaxIdx;
-        int rowMaxVal = block_rows.maxCoeff(&rowMaxIdx);
-        int colMaxVal = block_cols.maxCoeff(&colMaxIdx);
-
-        // int max_row = max_element(block_rows.begin(), block_rows.end()) - block_rows.begin();
-        // int max_col = max_element(block_cols.begin(), block_cols.end()) - block_cols.begin();
-        // cout<<"+++"<<block_rows[max_row]<<","<<block_cols[max_col]<<endl;
         if (block_rows[rowMaxIdx] > 1000 && block_cols[colMaxIdx] > 1000)
         {
-            cout << "+++" << endl;
-            test_mat.at<uchar>(rowMaxIdx * BLOCK_SIZE, colMaxIdx * BLOCK_SIZE) = 255;
-            imshow("max_ele", test_mat);
-            cv::waitKey(30);
+            return true;
         }
     }
+    return false;
+}
+
+void ObjDetector::InitRoiByBlock(const cv::Point &p, cv::Rect *dst)
+{
+    dst->width = MAT_COLS / 4;
+    dst->height = MAT_ROWS / 4;
+    dst->x = p.x - MAT_COLS / 8;
+    dst->y = p.y - MAT_ROWS / 8;
+}
+
+void ObjDetector::getEventCntImg(cv::Mat &cntImg)
+{
+    Timer timercnt;
+    timercnt.start();
+    // 简单的来说,就是对时间图归一化,然后用平均时间做阈值,进行01区分
+    cv::Mat normed_event_image = cv::Mat::zeros(cv::Size(cntImg.cols, cntImg.rows), CV_8UC1);
+
+    cv::Mat tmpM; // image matrix
+    // tmpM = event_counts_.mul(event_counts_);
+    // cv::normalize(tmpM, tmpM, 0, 255, cv::NORM_MINMAX);
+    // imshow("tmpMMMMMM",tmpM);
+
+    /* normalization */
+    cv::normalize(event_counts_, normed_event_image, 0, 255, cv::NORM_MINMAX);
+    cv::imshow("norm time", normed_event_image);
+
+    /* thresholding */ //mean函数 mask只有0和1的区别，1就是参与运算，0就是不参与,不是权重
+    float thres = cv::mean(normed_event_image, event_counts_)[0] +
+                  k_a_th_ * k_omega_ + k_b_th_;
+    thres = cv::mean(normed_event_image, event_counts_)[0];
+    // 小于阈值为0，大于为原始值
+    cv::threshold(normed_event_image, tmpM, thres / 2, 1, cv::THRESH_TOZERO);
+    cv::imshow("mmm", tmpM);
+    cv::threshold(normed_event_image, tmpM, 0, 255, cv::THRESH_OTSU);
+
+    imshow("111qq", tmpM);
+
+    Timer timerb2;
+    timerb2.start();
+    /* Gaussian Blur */
+    cv::blur(tmpM, tmpM, cv::Size(5, 5));
+    cv::normalize(tmpM, tmpM, 0, 255, cv::NORM_MINMAX);
+    timerb2.stop();
+    std::cout << "b2: " << timerb2.getElapsedMilliseconds() << "ms\n";
+
+    /* Morphology */
+    cv::Mat kernel = cv::getStructuringElement(
+        cv::MORPH_RECT, cv::Size(k_rect_kernel_size_, k_rect_kernel_size_),
+        cv::Point(-1, -1));
+    // 开操作，先腐蚀再膨胀
+    cv::morphologyEx(tmpM, tmpM, cv::MORPH_OPEN, kernel, cv::Point(-1, -1), 1);
+    timerb2.stop();
+    std::cout << "morph: " << timerb2.getElapsedMilliseconds() << "ms\n";
+
+    /* 图像按位平方，增加对比度 */
+    tmpM = tmpM.mul(tmpM);
+    // cv::imshow("morph", m);
+    cv::normalize(tmpM, tmpM, 0, 255, cv::NORM_MINMAX);
+    tmpM.convertTo(cntImg, CV_8UC1);
+    cv::imshow("gray", cntImg);
+    // 时间图归一化了三次
+    timercnt.stop();
+    std::cout << "cnt img: " << timercnt.getElapsedMilliseconds() << "ms\n";
+}
+
+void ObjDetector::edgeDetect()
+{
+    Timer timeedge;
+    timeedge.start();
+
+    // 满足方差条件才进行计算
+
+    int rowMaxBlockIdx, colMaxBlockIdx;
+    if (isObjAppear(rowMaxBlockIdx, colMaxBlockIdx))
+    {
+
+        // 这里可以做一步操作吧，直接切出roi区域然后进行操作，可以省时间啊
+        getEventCntImg(gray_image_);
+
+        /* initialize ROI convergence */
+        cv::Rect ori_rect;
+        cv::Point max_loc = cv::Point(colMaxBlockIdx * BLOCK_SIZE + BLOCK_SIZE / 2, rowMaxBlockIdx * BLOCK_SIZE + BLOCK_SIZE / 2); // center-of-mass
+
+        // 初始化一个大的ROI，大小为1/4个图像，max_loc在中心位置，然后对ROI进行边缘处理
+        InitRoiByBlock(max_loc, &ori_rect);
+        GetRect(gray_image_, &ori_rect);
+        // imshow("gray_cut",gray_image_(ori_rect));
+        test_mat.at<uchar>(rowMaxBlockIdx * BLOCK_SIZE, colMaxBlockIdx * BLOCK_SIZE) = 255;
+        imshow("max_ele", test_mat);
+
+        Timer timeee;
+        timeee.start();
+
+        cv::blur(gray_image_, iter_mat_, cv::Size(5, 5));
+        cv::threshold(iter_mat_, iter_mat_, 50, 255, cv::THRESH_TOZERO);
+        // imshow("iter", iter_mat_);
+        timeee.stop();
+        std::cout << "blur: " << timeee.getElapsedMilliseconds() << "ms\n";
+
+        // 高斯迭代找出精细的roi
+        cv::Rect temp_rect;
+        bool is_roi = GaussianModelConvergence(iter_mat_, ori_rect, &processed_image_,
+                                               &temp_rect, 2);
+        if (is_roi)
+        {
+            /* if found the smallest ROI */
+            double ratio_x = 0, ratio_y = 0;
+            // 找到最小了，进行区域细化
+            GetRatio(processed_image_, &ratio_x, &ratio_y);
+            // 没看懂这一步是要干嘛，似乎是如果满足，那就要进行一步细化
+            if (IsTrue(temp_rect, last_rect_, ratio_x, ratio_y, k_ratio_thres_))
+            {
+                // processed_image是处理之后的ROI区域的图像，这一步就是在精细化rect，当然有可能精细化失败
+                // 如果上边的条件为真，那就说明误差太大了，还得细化
+                Mask(processed_image_, &temp_rect);
+            }
+            last_rect_ = temp_rect;
+            // is_object 只有这一处为true
+            is_object_ = true;
+        }
+        else
+        {
+            // 就直接认为他没找到了？
+            is_object_ = false;
+        }
+
+        /* corner case: check if roi large enough */
+        // 这一步还是跟之前干一样的事，担心last是空的,如果经历了上边的Mask，那么这个也一定能通过
+        if (last_rect_.area() < k_min_area_)
+        {
+            is_object_ = false; // reject small roi
+        }
+        else if (is_object_)
+        {
+            // 找包围此轮廓的最小矩形，计算非0像素的最小矩形
+            cv::Rect min_obj = cv::boundingRect(gray_image_(last_rect_));
+            // 更新roi
+            last_rect_.x += min_obj.x;
+            last_rect_.y += min_obj.y;
+            last_rect_.width = min_obj.width;
+            last_rect_.height = min_obj.height;
+        }
+        cv::rectangle(test_mat, last_rect_, cv::Scalar(255, 255, 255));
+    }
+    timeedge.stop();
+    std::cout << "edge detect: " << timeedge.getElapsedMilliseconds() << "ms\n";
 }
 
 void ObjDetector::LoadEdge(const Eigen::Array<int, MAT_ROWS / BLOCK_SIZE, 1> &rowVar,

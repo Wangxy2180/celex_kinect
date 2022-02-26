@@ -68,6 +68,8 @@ private:
   void MorphologyOperations(cv::Mat *dst);
   void DebugVisualize(const cv::Mat &src);
 
+  void getBlockCenPoint(int &x_idx, int &y_idx);
+
   /* inline functions */
   inline void IntTruncate(const int &ref, double *value);
   inline void GetAverage(const cv::Mat m, double *avg, int *num);
@@ -75,6 +77,12 @@ private:
   inline bool IsTrue(const cv::Rect &src, const cv::Rect &src2,
                      const double &rx, const double &ry,
                      const double &thres); // TODO: rename this
+  bool isObjAppear(int &rowMaxIdx, int &colMaxIdx);
+
+  void InitRoiByBlock(const cv::Point &p, cv::Rect *dst);
+void getEventCntImg(cv::Mat &cntImg);
+
+
 
 public:
   ObjDetector()

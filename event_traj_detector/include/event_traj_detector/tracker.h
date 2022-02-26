@@ -13,6 +13,8 @@
 #include <vector>
 #include <string>
 #include "time.h"
+#include <unistd.h>
+
 
 #include "celex5_msgs/Event.h"
 #include "celex5_msgs/EventVector.h"
@@ -30,6 +32,8 @@
 #include "event_traj_detector/eventor.h"
 #include "event_traj_detector/obj_detector.h"
 // #include "event_traj_detector/velocity_est.h"
+
+#include "timer.h"
 
 using namespace std;
 
@@ -50,13 +54,15 @@ class TrackSingleObj {
 
   /* flags */
   DETECTION_STATE state_;  // indicating drone status, TODO: rename this
-  int event_count_times_;
+  // int event_count_times_;
 
   /* parameters */
   std::string k_img_raw_topic_, k_event_topic_, k_imu_topic_,
     k_depth_topic_, k_odometry_topic_, k_imu_type_;
   double kNewObjThresTime;  // time threshold for judging a new object
   double KNewObjThresDis;  // distance threshold for judging a new object
+
+  bool isVis;
 
   /* tracking utilities */
   Eventor::Ptr eventor_;  // data loader and motion compensation manager
@@ -76,6 +82,8 @@ class TrackSingleObj {
       odom_sub_;
   ros::Publisher start_avoidance_pub_, bullet_estimate_pub_, depth_pub_;
   image_transport::Publisher image_pub_, depth_res_pub_, time_image_pub_;
+
+  Timer timer_;
 
   /* ROS functions */
   void ReadParameters(ros::NodeHandle &n);
@@ -98,7 +106,7 @@ class TrackSingleObj {
  public:
   TrackSingleObj(ros::NodeHandle &nh) : nh_(nh) {
     start_traj_id_ = 0;
-    event_count_times_ = 0;
+    // event_count_times_ = 0;
   }
   ~TrackSingleObj() {}
   void main();

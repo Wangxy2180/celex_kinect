@@ -90,7 +90,7 @@ private:
     // std::vector<Isometry3d> trans_vector;
 
     /* image outputs */
-    cv::Mat time_img_;     // mean-time graph
+    cv::Mat event_img_;     // mean-time graph
     cv::Mat event_counts_; // counts for event in each pixel
     cv::Mat color_img_;
 
@@ -123,8 +123,8 @@ private:
     // void UpdateFC2world();
     // void UpdateCam2body();
 
-    vector<int> block_rows;
-    vector<int> block_cols;
+    // vector<int> block_rows;
+    // vector<int> block_cols;
 
     Eigen::Array<int, MAT_ROWS / BLOCK_SIZE, 1> block_rows_eigen;
     Eigen::Array<int, MAT_COLS / BLOCK_SIZE, 1> block_cols_eigen;
@@ -145,8 +145,8 @@ public:
             5.3631797700847164e+02, 2.3404853514480661e+02, 0, 0, 1;
         K_inverse = K.inverse();
 
-        block_rows.resize(MAT_ROWS / BLOCK_SIZE, 0);
-        block_cols.resize(MAT_COLS / BLOCK_SIZE, 0);
+        // block_rows.resize(MAT_ROWS / BLOCK_SIZE, 0);
+        // block_cols.resize(MAT_COLS / BLOCK_SIZE, 0);
 
         block_cols_eigen.setZero();
         block_rows_eigen.setZero();
@@ -162,7 +162,7 @@ public:
     // void init();
     void generate();
     void Clear();
-    void edgeBlock(const int x, const int y);
+    void updateEdgeBlock(const int x, const int y);
     void getEdgeBlock(Eigen::Array<int, MAT_ROWS / BLOCK_SIZE, 1> &rowVar,
                           Eigen::Array<int, MAT_COLS / BLOCK_SIZE, 1> &colVar);
 
@@ -177,7 +177,7 @@ public:
     void LoadOdometry(const nav_msgs::Odometry::ConstPtr &odom);
     void LoadDepth(const cv::Mat &depth);
     void SetIMUType(const string &s);
-    cv::Mat GetTimeImage(void) { return time_img_; }
+    cv::Mat GetEventImage(void) { return event_img_; }
     cv::Mat GetEventCount(void) { return event_counts_; }
     cv::Mat GetVisualization(void);
 

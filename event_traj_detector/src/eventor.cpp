@@ -10,29 +10,19 @@ void Eventor::generate()
 {
     Clear();
     // notCompensate(&time_img_, &event_counts_);
-    rotationalCompensate(&time_img_, &event_counts_);
+    rotationalCompensate(&event_img_, &event_counts_);
     // translationalCompensate(&time_img_, &event_counts_);
 }
 
 void Eventor::Clear()
 {
-    // omega_avg_.setZero();
     events_buffer_.clear();
-    //   imu_size_ = IMU_buffer_.size();
 
-    time_img_ = cv::Mat::zeros(cv::Size(MAT_COLS, MAT_ROWS), CV_32FC1);
+    event_img_ = cv::Mat::zeros(cv::Size(MAT_COLS, MAT_ROWS), CV_8UC1);
     event_counts_ = cv::Mat::zeros(cv::Size(MAT_COLS, MAT_ROWS), CV_8UC1);
-
-    fill(block_rows.begin(), block_rows.end(), 0);
-    fill(block_cols.begin(), block_cols.end(), 0);
 
     block_rows_eigen.setZero();
     block_cols_eigen.setZero();
-
-    // block_rows.clear();
-    // block_cols.clear();
-    // block_rows.resize(MAT_ROWS / BLOCK_SIZE, 0);
-    // block_cols.resize(MAT_COLS / BLOCK_SIZE, 0);
 }
 
 void Eventor::LoadEvents(const celex5_msgs::EventVector::ConstPtr &emsg)
@@ -46,7 +36,7 @@ void Eventor::LoadDepth(const cv::Mat &depth) { depth_img_ = depth; }
 cv::Mat Eventor::GetVisualization()
 {
     cv::Mat m, m_color;
-    cv::normalize(time_img_, m, 0, 255, cv::NORM_MINMAX);
+    cv::normalize(event_img_, m, 0, 255, cv::NORM_MINMAX);
     m.convertTo(m, CV_8UC1);
     cv::applyColorMap(m, m_color, cv::COLORMAP_JET);
     // cv::namedWindow("time image");
@@ -90,107 +80,54 @@ void Eventor::notCompensate(cv::Mat *timeImg, cv::Mat *eventCount)
     }
 }
 
-void Eventor::edgeBlock(const int x, const int y)
+void Eventor::updateEdgeBlock(const int x, const int y)
 {
-    block_rows[y / BLOCK_SIZE] += 1;
-    block_cols[x / BLOCK_SIZE] += 1;
+    // block_rows[y / BLOCK_SIZE] += 1;
+    // block_cols[x / BLOCK_SIZE] += 1;
 
     block_rows_eigen[y / BLOCK_SIZE] += 1;
     block_cols_eigen[x / BLOCK_SIZE] += 1;
-
-    // cout<<"x,y:"<<x<<","<<y<<endl;
-
-    // if(y/BLOCK_SIZE == 7)cout<<"888<"<<block_rows[7]<<endl;
 }
 
-void Eventor::getEdgeBlock(Eigen::Array<int, MAT_ROWS/BLOCK_SIZE, 1>& rowVar,
-    Eigen::Array<int, MAT_COLS/BLOCK_SIZE, 1>& colVar)
+void Eventor::getEdgeBlock(Eigen::Array<int, MAT_ROWS / BLOCK_SIZE, 1> &rowVar,
+                           Eigen::Array<int, MAT_COLS / BLOCK_SIZE, 1> &colVar)
 {
-    // rowBlock.assign(block_rows.begin(), block_rows.end());
-    // colBlock.assign(block_cols.begin(), block_cols.end());
-    rowVar=block_rows_eigen;
-    colVar=block_cols_eigen;
-
-
-    // float col_variance = (block_cols_eigen.mean() - block_cols_eigen).square().sum() / (MAT_COLS / BLOCK_SIZE);
-    // float row_variance = (block_rows_eigen.mean() - block_rows_eigen).square().sum() / (MAT_ROWS / BLOCK_SIZE);
-
-    // rowVar=row_variance;
-    // colVar=col_variance;
-
-    // if(row_variance>1500 && col_variance>1500)
-    // {
-        
-    // }
-
-    // double sum1 = std::accumulate(rowBlock.begin(), rowBlock.end(), 0.0);
-    // double mean1 = sum1 / rowBlock.size(); //均
-    // double ret_sum1 = 0;
-    // for (auto kk : rowBlock)
-    // {
-    //     ret_sum1 += (mean1 - kk) * (mean1 - kk);
-    // }
-    // double vrow = ret_sum1 / rowBlock.size();
-
-    // double sum2 = std::accumulate(colBlock.begin(), colBlock.end(), 0.0);
-    // double mean2 = sum2 / colBlock.size(); //均
-    // double ret_sum2 = 0;
-    // for (auto kk : colBlock)
-    // {
-    //     ret_sum2 += (mean2 - kk) * (mean2 - kk);
-    // }
-    // double vcol = ret_sum2 / colBlock.size();
-
-    // cout <<">>>"<< col_variance << "," << row_variance << endl
-    //      <<"<<<"<< vcol << "," << vrow << endl;
-    // cout << "--------------" << endl;
+    rowVar = block_rows_eigen;
+    colVar = block_cols_eigen;
 }
 
-void Eventor::rotationalCompensate(cv::Mat *timeImg, cv::Mat *eventCount)
+void Eventor::rotationalCompensate(cv::Mat *eventImg, cv::Mat *eventCount)
 {
     //   寻找min时间
-    celex5_msgs::Event oldestEvent = *min_element(events_buffer_.begin(), events_buffer_.end(), [](celex5_msgs::Event &a, celex5_msgs::Event &b)
-                                                  { return a.in_pixel_timestamp < b.in_pixel_timestamp; });
-    auto t0 = oldestEvent.in_pixel_timestamp;
-    //   auto t0 = events_buffer_[0].in_pixel_timestamp;
+    // celex5_msgs::Event oldestEvent = *min_element(events_buffer_.begin(), events_buffer_.end(), [](celex5_msgs::Event &a, celex5_msgs::Event &b)
+    //                                               { return a.in_pixel_timestamp < b.in_pixel_timestamp; });
+    // auto t0 = oldestEvent.in_pixel_timestamp;
+    // //   auto t0 = events_buffer_[0].in_pixel_timestamp;
 
     for (int i = 0; i < event_size_; i++)
     {
         celex5_msgs::Event e = events_buffer_[i];
         // float deltaT = (e.in_pixel_timestamp - t0).toSec();
         // 单位是秒
-        float deltaT = (e.in_pixel_timestamp - t0) / 1000000;
+        // float deltaT = (e.in_pixel_timestamp - t0) / 1000000;
 
         // 这里要注意，celex数据xy是反的，x最大800，y最大1280
         int ix = static_cast<int>(e.y);
         int iy = static_cast<int>(MAT_ROWS - e.x);
-        // cout<<"x,y"<<ix<<","<<iy<<endl;
 
         if (IsWithinTheBoundary(ix, iy))
         {
             // 计算落在那个block中
-            edgeBlock(ix, iy);
+            updateEdgeBlock(ix, iy);
             // 更新两张图
-            int *c = eventCount->ptr<int>(iy, ix);
+            uchar *c = eventCount->ptr<uchar>(iy, ix);
             *c += 1;
 
             // 平均time_img
-            float *q = timeImg->ptr<float>(iy, ix);
-            float v = *q;
-            *q += (deltaT - v) / (*c);
+            uchar *q = eventImg->ptr<uchar>(iy, ix);
+            *q = 255;
         }
     }
-    // cout << "--block_rows:" << block_rows.size() << "," << block_rows[8] << endl;
-    // cout << "--block_cols:" << block_cols.size() << "," << block_cols[8] << endl;
-
-    ///////////// to debug ////////////////////////
-    // double maxValue;
-    // maxValue = *max_element(timeImg->begin<float>(), timeImg->end<float>());
-    // std::cout << "time image max " << maxValue << std::endl;
-    // maxValue = *max_element(eventCount->begin<uchar>(),
-    // eventCount->end<uchar>()); std::cout << "event count max " << maxValue <<
-    // std::endl; GetVisualization();
-    //////////////////////////////////////////////
 }
 
 bool Eventor::updateEventWindow(int dataSize)

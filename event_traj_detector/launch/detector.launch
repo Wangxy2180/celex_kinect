@@ -1,7 +1,12 @@
 <launch> 
+    <arg name="isVis" default="false"/>
+
 
     <node pkg="event_traj_detector" type="event_traj_detector_node" name="event_traj_detector_node" output="screen">
         <rosparam command="load" file="$(find event_traj_detector)/launch/config/detector_default.yaml" />
+
+        <param name="isVis" type="bool" value="$(arg isVis)"/>
     </node>         
+
 
 </launch>

@@ -1,5 +1,4 @@
 #include "event_traj_detector/tracker.h"
-#include "ros/ros.h"
 
 namespace tracker
 {
@@ -35,7 +34,7 @@ namespace tracker
         //       nh_.subscribe(k_img_raw_topic_, 1, &TrackSingleObj::ImageCallback, this);
         // 检测ROI区域
         events_sub_ =
-            nh_.subscribe(k_event_topic_, 2, &TrackSingleObj::EventsCallback, this);
+            nh_.subscribe(k_event_topic_, 30, &TrackSingleObj::EventsCallback, this);
 
         //   imu_sub_ = nh_.subscribe(k_imu_topic_, 10, &TrackSingleObj::ImuCallback, this,
         //                            ros::TransportHints().tcpNoDelay());
@@ -71,6 +70,8 @@ namespace tracker
         //   n.getParam("/event_traj_detector_node/odometry_topic", k_odometry_topic_);
         //   k_imu_type_ = "px4";
         // (k_imu_type_.find("dji") < k_imu_type_.length()) ? "dji" : "px4";
+
+        n.param<bool>("isVis", isVis, true);
     }
 
     /**
@@ -81,6 +82,7 @@ namespace tracker
     void TrackSingleObj::EventsCallback(
         const celex5_msgs::EventVector::ConstPtr &emsg)
     {
+        timer_.start();
         // 做环境阈值工作
         // eventor_->updateEventWindow(emsg->events.size());
         // if (!eventor_->initComplete())
@@ -89,7 +91,7 @@ namespace tracker
         //     return;
 
         static int obj_count = 0;
-        event_count_times_++;
+        // event_count_times_++;
 
         /* motion compensate input events */
         // 将事件信息拷贝到这event类中
@@ -100,11 +102,11 @@ namespace tracker
         eventor_->generate();
 
         /* detect objects on compensated images */
-        cv::Mat time_image, event_count, small, mask;
-        time_image = eventor_->GetTimeImage();
+        cv::Mat event_image, event_count, small, mask;
+        event_image = eventor_->GetEventImage();
         event_count = eventor_->GetEventCount();
 
-        obj_detector_->LoadImages(event_count, time_image);
+        obj_detector_->LoadImages(event_count, event_image);
         // time detect
         // obj_detector_->Detect();
 
@@ -125,16 +127,17 @@ namespace tracker
    */
         if (obj_detector_->ObjMissed())
         {
-            Visualize();
+            if (isVis)
+                Visualize();
             return;
         }
 
-        // 如果到这里了，那就是找到目标物体了，先更新一下深度图中ROI的值
+        // 如果到这里了，那就是找到目标物体了，先更新一下深度图中的ROI
         /* project ROI into depth image */
         depth_estimator_->SetEventDetectionRes(max_rect);
 
         // 计算区域内的平均时间
-        small = time_image(max_rect);
+        small = event_image(max_rect);
         small.convertTo(small, CV_8U);
         auto ts = cv::mean(small, small); // detection's timestamp
 
@@ -143,7 +146,8 @@ namespace tracker
         //   这里改一下，改成记录最老的事件，然后这里直接调用
         ros::Time tt;
         tt.fromNSec(emsg->events[0].in_pixel_timestamp * 1000);
-        point_in_plane.header.stamp = tt + ros::Duration(ts[0]);
+        point_in_plane.header.stamp = ros::Time::now();
+        // tt + ros::Duration(ts[0]);
         //   point_in_plane.header.stamp = emsg->events[0].in_pixel_timestamp + ros::Duration(ts[0]);
         point_in_plane.header.frame_id = "/cam";
         //   计算中心点
@@ -219,8 +223,14 @@ namespace tracker
         point_last_ = point_in_plane;
 
         /* visualize time image */
-        Visualize();
-        cv::waitKey(30);
+        if (isVis)
+            Visualize();
+        cv::waitKey(1);
+        // sleep(3);
+        timer_.stop();
+        std::cout << "callback: " << timer_.getElapsedMilliseconds() << "ms\n";
+        // auto elapsed = timer_.toc();
+        // ROS_INFO("call :%fms",elapsed/1000000);
     }
 
     /**
@@ -294,6 +304,7 @@ namespace tracker
             ros::Duration(kNewObjThresTime))
         { // over than 10 milliseconds
             ROS_DEBUG("Time duration between two observations is too long");
+            // ROS_ERROR("Time duration between two observations is too long");
         }
         else
         {
@@ -304,6 +315,7 @@ namespace tracker
             if (dis > KNewObjThresDis)
             { // if two objects are too far
                 // TODO: Use KF to estimate new position and judge if it's a new object
+                // ROS_ERROR("diantance");
             }
             else
             {
