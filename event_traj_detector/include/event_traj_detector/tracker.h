@@ -63,6 +63,7 @@ class TrackSingleObj {
   double KNewObjThresDis;  // distance threshold for judging a new object
 
   bool isVis;
+  bool isSave;
 
   /* tracking utilities */
   Eventor::Ptr eventor_;  // data loader and motion compensation manager
@@ -81,7 +82,7 @@ class TrackSingleObj {
   ros::Subscriber img_raw_sub_, events_sub_, imu_sub_, trigger_sub_, depth_sub_,
       odom_sub_;
   ros::Publisher start_avoidance_pub_, bullet_estimate_pub_, depth_pub_;
-  image_transport::Publisher image_pub_, depth_res_pub_, time_image_pub_;
+  image_transport::Publisher detection_res_pub, depth_res_pub_, cnt_image_pub_;
 
   Timer timer_;
 
@@ -89,7 +90,7 @@ class TrackSingleObj {
   void ReadParameters(ros::NodeHandle &n);
 //   void ImuCallback(const sensor_msgs::ImuConstPtr &imu);
 //   void OdometryCallback(const nav_msgs::Odometry::ConstPtr &odom);
-  void TriggerCallback(const geometry_msgs::PoseStamped &p);
+  // void TriggerCallback(const geometry_msgs::PoseStamped &p);
   void ImageCallback(const sensor_msgs::Image::ConstPtr &imsg);
 //   void EventsCallback(const dvs_msgs::EventArray::ConstPtr &emsg);
   void EventsCallback(const celex5_msgs::EventVector::ConstPtr &emsg);
@@ -111,6 +112,8 @@ class TrackSingleObj {
   ~TrackSingleObj() {}
   void main();
   void Visualize(void);
+
+  void saveRect();
 };
 }  // namespace tracker
 

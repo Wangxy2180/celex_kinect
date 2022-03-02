@@ -81,13 +81,10 @@ private:
     Eigen::Matrix3f K_inverse;
 
     /* data */
-    //   vector<sensor_msgs::Imu> IMU_buffer_;
     vector<celex5_msgs::Event> events_buffer_;
 
-    //   nav_msgs::Odometry odoms_buffer_;
     cv::Mat depth_img_;
 
-    // std::vector<Isometry3d> trans_vector;
 
     /* image outputs */
     cv::Mat event_img_;     // mean-time graph
@@ -123,8 +120,6 @@ private:
     // void UpdateFC2world();
     // void UpdateCam2body();
 
-    // vector<int> block_rows;
-    // vector<int> block_cols;
 
     Eigen::Array<int, MAT_ROWS / BLOCK_SIZE, 1> block_rows_eigen;
     Eigen::Array<int, MAT_COLS / BLOCK_SIZE, 1> block_cols_eigen;
@@ -157,7 +152,7 @@ public:
     ~Eventor() {}
 
     bool updateEventWindow(int dataSize);
-    bool initComplete();
+    bool isInitComplete();
     bool objAppear();
     // void init();
     void generate();

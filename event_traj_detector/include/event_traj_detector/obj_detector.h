@@ -34,15 +34,13 @@ private:
   const float k_b_th_ = -0.1;
   const float k_omega_ = 15;
   const double k_ratio_thres_ = 3.0;
-  const float k_min_area_ =
-      45; // the minimum area size to be recognized as object
+  const float k_min_area_ = 45; // the minimum area size to be recognized as object
 
   /* images */
   cv::Mat event_counts_;    // CV_8UC1
-  cv::Mat time_image_;      //  CV_32FC1
+  cv::Mat event_image_;     //  CV_32FC1
   cv::Mat processed_image_; // init, CV_32FC1
   cv::Mat gray_image_;      // CV_8UC1
-  cv::Mat iter_mat_;
 
   cv::Mat test_mat;
 
@@ -66,9 +64,10 @@ private:
   bool GaussianModelConvergence(const cv::Mat &msrc, const cv::Rect &rsrc,
                                 cv::Mat *mdst, cv::Rect *rdst, int iterTimes);
   void MorphologyOperations(cv::Mat *dst);
-  void DebugVisualize(const cv::Mat &src);
+  // void DebugVisualize(const cv::Mat &src);
 
   void getBlockCenPoint(int &x_idx, int &y_idx);
+
 
   /* inline functions */
   inline void IntTruncate(const int &ref, double *value);
@@ -80,9 +79,7 @@ private:
   bool isObjAppear(int &rowMaxIdx, int &colMaxIdx);
 
   void InitRoiByBlock(const cv::Point &p, cv::Rect *dst);
-void getEventCntImg(cv::Mat &cntImg);
-
-
+  void getEventCntImg(cv::Mat &cntImg);
 
 public:
   ObjDetector()
@@ -106,6 +103,9 @@ public:
   void edgeDetect();
   void LoadEdge(const Eigen::Array<int, MAT_ROWS / BLOCK_SIZE, 1> &rowVar,
                 const Eigen::Array<int, MAT_COLS / BLOCK_SIZE, 1> &colVar);
+
+  cv::Mat getEventVis();
+
 
   typedef std::unique_ptr<ObjDetector> Ptr;
 };

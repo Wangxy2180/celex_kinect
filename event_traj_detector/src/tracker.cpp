@@ -47,9 +47,9 @@ namespace tracker
         //                     this, ros::TransportHints().tcpNoDelay());
 
         /* advertiser */
-        image_pub_ = it_img_rst.advertise("/dvs/detection_res", 1);
+        detection_res_pub = it_img_rst.advertise("/dvs/detection_res", 1);
         depth_res_pub_ = it_depth_rst.advertise("/depth/res", 1);
-        time_image_pub_ = it_img_mid.advertise("/dvs/time_image", 1);
+        cnt_image_pub_ = it_img_mid.advertise("/dvs/time_image", 1);
         depth_pub_ =
             nh_.advertise<geometry_msgs::PointStamped>("/cam_depth_bullet_point", 1);
         start_avoidance_pub_ =
@@ -72,6 +72,7 @@ namespace tracker
         // (k_imu_type_.find("dji") < k_imu_type_.length()) ? "dji" : "px4";
 
         n.param<bool>("isVis", isVis, true);
+        n.param<bool>("isSave", isSave, true);
     }
 
     /**
@@ -85,87 +86,80 @@ namespace tracker
         timer_.start();
         // 做环境阈值工作
         // eventor_->updateEventWindow(emsg->events.size());
-        // if (!eventor_->initComplete())
+        // if (!eventor_->isInitComplete())
         //     return;
         // if (!eventor_->objAppear())
         //     return;
 
         static int obj_count = 0;
-        // event_count_times_++;
 
-        /* motion compensate input events */
-        // 将事件信息拷贝到这event类中
+        // 将事件信息拷贝到这eventor类中
         eventor_->LoadEvents(emsg);
 
         eventor_->LoadDepth(depth_estimator_->GetDepth());
-        // 就是在这里边进行的更新time_img cnt_img
+        // 就是在这里边进行的更新eventImg cntImg
         eventor_->generate();
 
-        /* detect objects on compensated images */
-        cv::Mat event_image, event_count, small, mask;
+        /* detect objects images */
+        cv::Mat event_image, event_count;
         event_image = eventor_->GetEventImage();
         event_count = eventor_->GetEventCount();
 
+        {
+            // static int eventSaveCnt = 0;
+            // imwrite("/home/free/catkin_cd/src/celex_kinect/dataF/pureEvent/" + to_string(eventSaveCnt++) + ".jpg", event_image);
+        }
+
         obj_detector_->LoadImages(event_count, event_image);
-        // time detect
+
         // obj_detector_->Detect();
 
         ///////////////////////////////////////////
-        // float rowVar, colVar;
         Eigen::Array<int, MAT_ROWS / BLOCK_SIZE, 1> rowBlock;
         Eigen::Array<int, MAT_COLS / BLOCK_SIZE, 1> colBlock;
 
         eventor_->getEdgeBlock(rowBlock, colBlock);
         obj_detector_->LoadEdge(rowBlock, colBlock);
+        timer_.stop();
+        std::cout << "callback before detect: " << timer_.getElapsedMilliseconds() << "ms\n";
+
         obj_detector_->edgeDetect();
+        timer_.stop();
+        std::cout << "callback end detect" << timer_.getElapsedMilliseconds() << "ms\n";
 
-        // 这里顺序不大对啊，应该先判断再获取max_rect
-        cv::Rect max_rect = obj_detector_->GetDetectRsts();
-
-        /**
-   * @brief No objected detected in this frame
-   */
         if (obj_detector_->ObjMissed())
         {
             if (isVis)
                 Visualize();
+            timer_.stop();
+            std::cout << "===callback obj miss: " << timer_.getElapsedMilliseconds() << "ms\n";
             return;
         }
 
+        cv::Rect max_rect = obj_detector_->GetDetectRsts();
         // 如果到这里了，那就是找到目标物体了，先更新一下深度图中的ROI
         /* project ROI into depth image */
         depth_estimator_->SetEventDetectionRes(max_rect);
 
-        // 计算区域内的平均时间
-        small = event_image(max_rect);
-        small.convertTo(small, CV_8U);
-        auto ts = cv::mean(small, small); // detection's timestamp
-
         geometry_msgs::PointStamped point_in_plane;
 
-        //   这里改一下，改成记录最老的事件，然后这里直接调用
-        ros::Time tt;
-        tt.fromNSec(emsg->events[0].in_pixel_timestamp * 1000);
         point_in_plane.header.stamp = ros::Time::now();
-        // tt + ros::Duration(ts[0]);
-        //   point_in_plane.header.stamp = emsg->events[0].in_pixel_timestamp + ros::Duration(ts[0]);
         point_in_plane.header.frame_id = "/cam";
         //   计算中心点
         point_in_plane.point.x = max_rect.x + max_rect.width * 0.5f;
         point_in_plane.point.y = max_rect.y + max_rect.height * 0.5f;
         point_in_plane.point.z = 0;
 
-        // cout << "(" << point_in_plane.point.x << "," << point_in_plane.point.y << ")"
-        //      << std::endl;
+        // cout << "(" << point_in_plane.point.x << "," << point_in_plane.point.y << ")"<< endl;
 
         /* chech if new objects are detected */
         if (IsNewObj(point_in_plane))
         {
-            if (state_ == TRIGGER_SENT)
-            {
-                state_ = ON;
-                obj_count = 0;
-            }
+            // if (state_ == TRIGGER_SENT)
+            // {
+            //     state_ = ON;
+            //     obj_count = 0;
+            // }
 
             ekf_obj_.reset_data(point_in_plane.point.x, point_in_plane.point.y,
                                 point_in_plane.header.stamp);
@@ -187,22 +181,22 @@ namespace tracker
         else
         {
             //still the old points accumulated observations send a trigger to planner
-            switch (state_)
-            {
-            case ON:
-            {
-                obj_count++;
-                if (obj_count > 4)
-                {
-                    PubTrigger();
-                }
-                break;
-            }
-            case TRIGGER_SENT:
-                break;
-            default:
-                break;
-            }
+            // switch (state_)
+            // {
+            // case ON:
+            // {
+            //     obj_count++;
+            //     if (obj_count > 4)
+            //     {
+            //         PubTrigger();
+            //     }
+            //     break;
+            // }
+            // case TRIGGER_SENT:
+            //     break;
+            // default:
+            //     break;
+            // }
 
             ekf_obj_.add_new_obs(point_in_plane.point.x, point_in_plane.point.y,
                                  point_in_plane.header.stamp);
@@ -225,12 +219,12 @@ namespace tracker
         /* visualize time image */
         if (isVis)
             Visualize();
+        if (isSave)
+            saveRect();
         cv::waitKey(1);
         // sleep(3);
         timer_.stop();
-        std::cout << "callback: " << timer_.getElapsedMilliseconds() << "ms\n";
-        // auto elapsed = timer_.toc();
-        // ROS_INFO("call :%fms",elapsed/1000000);
+        std::cout << "===callback: " << timer_.getElapsedMilliseconds() << "ms\n";
     }
 
     /**
@@ -238,21 +232,21 @@ namespace tracker
  *
  * @param p
  */
-    void TrackSingleObj::TriggerCallback(const geometry_msgs::PoseStamped &p)
-    {
-        switch (state_)
-        {
-        case OFF:
-            ROS_WARN("[DETECTION] START! >>>>>");
-            state_ = ON;
-            vis_trajs_.clear();
-            break;
-        default:
-            ROS_INFO("[DETECTION] STOP! <<<<<");
-            state_ = OFF;
-            break;
-        }
-    }
+    // void TrackSingleObj::TriggerCallback(const geometry_msgs::PoseStamped &p)
+    // {
+    //     switch (state_)
+    //     {
+    //     case OFF:
+    //         ROS_WARN("[DETECTION] START! >>>>>");
+    //         state_ = ON;
+    //         vis_trajs_.clear();
+    //         break;
+    //     default:
+    //         ROS_INFO("[DETECTION] STOP! <<<<<");
+    //         state_ = OFF;
+    //         break;
+    //     }
+    // }
 
     // void TrackSingleObj::ImuCallback(const sensor_msgs::ImuConstPtr &imu) {
     //   motion_compensation_->LoadIMUs(imu);
@@ -326,18 +320,18 @@ namespace tracker
         return true;
     }
 
-    inline void TrackSingleObj::PubTrigger()
-    {
-        ROS_WARN("AVOIDANCE START! Launch !!!");
-        geometry_msgs::PointStamped start_trigger;
-        start_trigger.header.stamp = ros::Time::now();
-        start_avoidance_pub_.publish(start_trigger);
-        state_ = TRIGGER_SENT;
-    }
+    // inline void TrackSingleObj::PubTrigger()
+    // {
+    //     ROS_WARN("AVOIDANCE START! Launch !!!");
+    //     geometry_msgs::PointStamped start_trigger;
+    //     start_trigger.header.stamp = ros::Time::now();
+    //     start_avoidance_pub_.publish(start_trigger);
+    //     state_ = TRIGGER_SENT;
+    // }
 
     /**
- * @brief add pre-defined colors into the buffer
- */
+     * @brief add pre-defined colors into the buffer
+     */
     inline void TrackSingleObj::InitVisualization()
     {
         m_colors_.push_back(cv::Scalar(255, 0, 0));
@@ -352,13 +346,12 @@ namespace tracker
     }
 
     /**
- * @brief visualize event-image and trajectories
- */
+     * @brief visualize event-cnt and trajectories
+     */
     void TrackSingleObj::Visualize()
     {
-        cv::Mat img = obj_detector_->GetVisualization();
-        std_msgs::Header h;
-        h.stamp = ros::Time::now();
+        cv::Mat grayCntImg = obj_detector_->GetVisualization();
+        // 对每个轨迹画连线图
         for (auto iter = vis_trajs_.begin(); iter < vis_trajs_.end(); iter++)
         {
             cv::Scalar cl = m_colors_[(iter - vis_trajs_.begin() + start_traj_id_) %
@@ -369,26 +362,39 @@ namespace tracker
             {
                 const auto &pt1 = point_list.at(iter_point);
                 const auto &pt2 = point_list.at(iter_point + 1);
-                cv::line(img, pt1, pt2, cl, 2, LINE_4);
+                cv::line(grayCntImg, pt1, pt2, cl, 2, LINE_4);
             }
         }
+
         double ekf_obj_x, ekf_obj_y;
         ekf_obj_.GetPosition(&ekf_obj_x, &ekf_obj_y);
-        cv::circle(img, cv::Point2d(ekf_obj_x, ekf_obj_y), 2,
+        cv::circle(grayCntImg, cv::Point2d(ekf_obj_x, ekf_obj_y), 2,
                    cv::Scalar(255, 255, 255), 2);
-        cv_bridge::CvImage cv_image(h, "bgr8", img);
-        image_pub_.publish(cv_image.toImageMsg());
+
+        std_msgs::Header h;
+        h.stamp = ros::Time::now();
+        cv_bridge::CvImage cv_image(h, "bgr8", grayCntImg);
+        // 发布检测结果
+        detection_res_pub.publish(cv_image.toImageMsg());
 
         /* visualize time image after motion compensation */
         cv::Mat time_img = eventor_->GetVisualization();
-        ///////////////////////////
-        //     Writer.write(time_img);
-        ///////////////////////////
 
         cv_bridge::CvImage cv_time_image(h, "bgr8", time_img);
-        time_image_pub_.publish(cv_time_image.toImageMsg());
+        cnt_image_pub_.publish(cv_time_image.toImageMsg());
+    }
 
-        // cout << "=========================" << endl;
+    void TrackSingleObj::saveRect()
+    {
+        static int saveCnt = 0;
+
+        cv::Mat grayCntImg = obj_detector_->GetVisualization();
+        imwrite("/home/free/catkin_cd/src/celex_kinect/dataF/colorRect/" + to_string(saveCnt) + ".jpg", grayCntImg);
+
+        cv::Mat eventImgRect = obj_detector_->getEventVis();
+        imwrite("/home/free/catkin_cd/src/celex_kinect/dataF/eventRect/" + to_string(saveCnt) + ".jpg", eventImgRect);
+
+        saveCnt++;
     }
 
 } // namespace tracker

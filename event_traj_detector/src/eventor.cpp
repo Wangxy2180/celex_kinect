@@ -11,7 +11,6 @@ void Eventor::generate()
     Clear();
     // notCompensate(&time_img_, &event_counts_);
     rotationalCompensate(&event_img_, &event_counts_);
-    // translationalCompensate(&time_img_, &event_counts_);
 }
 
 void Eventor::Clear()
@@ -36,55 +35,50 @@ void Eventor::LoadDepth(const cv::Mat &depth) { depth_img_ = depth; }
 cv::Mat Eventor::GetVisualization()
 {
     cv::Mat m, m_color;
-    cv::normalize(event_img_, m, 0, 255, cv::NORM_MINMAX);
-    m.convertTo(m, CV_8UC1);
+    cv::normalize(event_counts_, m, 0, 255, cv::NORM_MINMAX);
+    // m.convertTo(m, CV_8UC1);
     cv::applyColorMap(m, m_color, cv::COLORMAP_JET);
-    // cv::namedWindow("time image");
-    // cv::imshow( "window", m_color);
-    // cv::waitKey(0);
+    // cv::imshow( "window mcolor", m_color);
     return m_color;
 }
 
-/**
- * @brief Accumulate events without any compensation
- *
- * @param timeImg
- * @param eventCount
- */
-void Eventor::notCompensate(cv::Mat *timeImg, cv::Mat *eventCount)
-{
-    auto t0 = events_buffer_[0].in_pixel_timestamp;
-    float prevDeltaT = 0.0f;
+// /**
+//  * @brief Accumulate events without any compensation
+//  *
+//  * @param timeImg
+//  * @param eventCount
+//  */
+// void Eventor::notCompensate(cv::Mat *timeImg, cv::Mat *eventCount)
+// {
+//     auto t0 = events_buffer_[0].in_pixel_timestamp;
+//     float prevDeltaT = 0.0f;
 
-    for (int i = 0; i < event_size_; i++)
-    {
-        celex5_msgs::Event e = events_buffer_[i];
-        // float deltaT = (e.in_pixel_timestamp - t0).toSec();
-        float deltaT = (e.in_pixel_timestamp - t0) / 1000000;
+//     for (int i = 0; i < event_size_; i++)
+//     {
+//         celex5_msgs::Event e = events_buffer_[i];
+//         // float deltaT = (e.in_pixel_timestamp - t0).toSec();
+//         float deltaT = (e.in_pixel_timestamp - t0) / 1000000;
 
-        int ix = e.x;
-        int iy = e.y;
+//         int ix = e.x;
+//         int iy = e.y;
 
-        if (!IsWithinTheBoundary(ix, iy))
-        {
-            continue;
-        }
-        else
-        {
-            int *c = eventCount->ptr<int>(iy, ix);
-            float *q = timeImg->ptr<float>(iy, ix);
-            *c += 1;
-            float v = *q;
-            *q += (deltaT - v) / (*c);
-        }
-    }
-}
+//         if (!IsWithinTheBoundary(ix, iy))
+//         {
+//             continue;
+//         }
+//         else
+//         {
+//             int *c = eventCount->ptr<int>(iy, ix);
+//             float *q = timeImg->ptr<float>(iy, ix);
+//             *c += 1;
+//             float v = *q;
+//             *q += (deltaT - v) / (*c);
+//         }
+//     }
+// }
 
 void Eventor::updateEdgeBlock(const int x, const int y)
 {
-    // block_rows[y / BLOCK_SIZE] += 1;
-    // block_cols[x / BLOCK_SIZE] += 1;
-
     block_rows_eigen[y / BLOCK_SIZE] += 1;
     block_cols_eigen[x / BLOCK_SIZE] += 1;
 }
@@ -98,18 +92,9 @@ void Eventor::getEdgeBlock(Eigen::Array<int, MAT_ROWS / BLOCK_SIZE, 1> &rowVar,
 
 void Eventor::rotationalCompensate(cv::Mat *eventImg, cv::Mat *eventCount)
 {
-    //   寻找min时间
-    // celex5_msgs::Event oldestEvent = *min_element(events_buffer_.begin(), events_buffer_.end(), [](celex5_msgs::Event &a, celex5_msgs::Event &b)
-    //                                               { return a.in_pixel_timestamp < b.in_pixel_timestamp; });
-    // auto t0 = oldestEvent.in_pixel_timestamp;
-    // //   auto t0 = events_buffer_[0].in_pixel_timestamp;
-
     for (int i = 0; i < event_size_; i++)
     {
         celex5_msgs::Event e = events_buffer_[i];
-        // float deltaT = (e.in_pixel_timestamp - t0).toSec();
-        // 单位是秒
-        // float deltaT = (e.in_pixel_timestamp - t0) / 1000000;
 
         // 这里要注意，celex数据xy是反的，x最大800，y最大1280
         int ix = static_cast<int>(e.y);
@@ -145,7 +130,7 @@ bool Eventor::updateEventWindow(int dataSize)
     return true;
 }
 
-bool Eventor::initComplete()
+bool Eventor::isInitComplete()
 {
     // 根据第一窗口数值判断是否完成初始化
     if (env_window_(0) == 0)
@@ -177,13 +162,13 @@ bool Eventor::objAppear()
 //   return sqrt(pow2(depth) / (1.0 + pow2(y - K(0, 2)) / pow2(K(0, 0)) +
 //                              pow2(x - K(1, 2)) / pow2(K(1, 1))));
 // }
-inline double Eventor::ReadDepth(const cv::Mat &I, const int &x, const int &y)
-{
-    float depth = I.at<uint16_t>(y, x);
-    return sqrt((depth * depth) /
-                (1.0 + (x - K(0, 2)) * (x - K(0, 2)) / (K(0, 0) * K(0, 0)) +
-                 (y - K(1, 2)) * (y - K(1, 2)) / (K(1, 1) * K(1, 1))));
-}
+// inline double Eventor::ReadDepth(const cv::Mat &I, const int &x, const int &y)
+// {
+//     float depth = I.at<uint16_t>(y, x);
+//     return sqrt((depth * depth) /
+//                 (1.0 + (x - K(0, 2)) * (x - K(0, 2)) / (K(0, 0) * K(0, 0)) +
+//                  (y - K(1, 2)) * (y - K(1, 2)) / (K(1, 1) * K(1, 1))));
+// }
 
 // /**
 //  * @brief convert a vector to homogeneous coordinates
@@ -214,20 +199,20 @@ inline bool Eventor::IsWithinTheBoundary(const int &x, const int &y)
     return (x >= 0 && x < MAT_COLS && y >= 0 && y < MAT_ROWS);
 }
 
-/**
- * @brief check if event's corresponding point in depth image at a valid
- * distance
- *
- * @param depthImg
- * @param x, y: event's corresponding point
- * @param min minimum depth value
- * @param max maximum depth value
- * @return true: this event in range
- * @return false
- */
-inline bool Eventor::IsDepthInRange(const cv::Mat &depthImg, const int &x,
-                                    const int &y, int min, int max)
-{
-    return depthImg.at<uint16_t>(y, x) <= max &&
-           depthImg.at<uint16_t>(y, x) >= min;
-}
+// /**
+//  * @brief check if event's corresponding point in depth image at a valid
+//  * distance
+//  *
+//  * @param depthImg
+//  * @param x, y: event's corresponding point
+//  * @param min minimum depth value
+//  * @param max maximum depth value
+//  * @return true: this event in range
+//  * @return false
+//  */
+// inline bool Eventor::IsDepthInRange(const cv::Mat &depthImg, const int &x,
+//                                     const int &y, int min, int max)
+// {
+//     return depthImg.at<uint16_t>(y, x) <= max &&
+//            depthImg.at<uint16_t>(y, x) >= min;
+// }

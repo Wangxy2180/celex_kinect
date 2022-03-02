@@ -3,7 +3,7 @@
 #include <ros/ros.h>
 #include <cv_bridge/cv_bridge.h>
 #include <iostream>
-#include <Eigen/Geometry>  // Eigen 几何模块
+#include <Eigen/Geometry> // Eigen 几何模块
 #include <Eigen/Core>
 
 using namespace std;
@@ -127,10 +127,29 @@ void rect_size_test()
 
 void eigen_test()
 {
-      Eigen::Matrix3d R_c2b;
-  R_c2b << 0, 0, 1, -1, 0, 0, 0, -1, 0;
-  Eigen::Quaterniond q_c2b(R_c2b);  ///< quaternion
-  cout<<q_c2b.matrix()<<endl;
+    Eigen::Matrix3d R_c2b;
+    R_c2b << 0, 0, 1, -1, 0, 0, 0, -1, 0;
+    Eigen::Quaterniond q_c2b(R_c2b); ///< quaternion
+    cout << q_c2b.matrix() << endl;
+}
+
+void mul_test()
+{
+    cv::Mat img_ = cv::Mat::ones(cv::Size(2, 2), CV_8UC1);
+
+    uint8_t *i = img_.ptr<uint8_t>(0, 0);
+    *i = 100;
+    i = img_.ptr<uint8_t>(1, 0);
+    *i = 255;
+    i = img_.ptr<uint8_t>(0, 1);
+    *i = 1;
+    i = img_.ptr<uint8_t>(1, 1);
+    *i = 10;
+
+    cout<<"1"<<endl<<img_<<endl;
+    img_=img_.mul(img_);
+    cout<<"2"<<endl<<img_<<endl;
+
 }
 
 int main()
@@ -141,5 +160,6 @@ int main()
     // moment_test();
     // rect_size_test();
     // moment_margin_0();
-    eigen_test();
+    // eigen_test();
+    mul_test();
 }
