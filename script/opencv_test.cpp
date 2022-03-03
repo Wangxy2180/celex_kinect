@@ -112,7 +112,8 @@ void moment_test()
     cout << "--------" << endl;
     cout << mom.mu20 << "," << mom.m00 << endl
          << mom.mu02 << "," << mom.m00 << endl;
-    cout << epsilon_x << "," << epsilon_y << endl;
+    cout << "x:" << epsilon_x << ","
+         << "y:" << epsilon_y << endl;
 }
 
 void rect_size_test()
@@ -146,10 +147,87 @@ void mul_test()
     i = img_.ptr<uint8_t>(1, 1);
     *i = 10;
 
-    cout<<"1"<<endl<<img_<<endl;
-    img_=img_.mul(img_);
-    cout<<"2"<<endl<<img_<<endl;
+    cout << "1" << endl
+         << img_ << endl;
+    img_ = img_.mul(img_);
+    cout << "2" << endl
+         << img_ << endl;
+}
 
+void meanstddev_test()
+{
+    cv::Matx33f matrix(2, 1, 1, 1, 5, 1, 1, 8, 2);
+    cv::Mat meann, stdd, c;
+    cv::meanStdDev(matrix, meann, stdd, c);
+    cout << "mean:" << meann << ", std:" << stdd << endl;
+}
+
+void calhist_test()
+{
+    cv::Mat matrix = cv::Mat::zeros(cv::Size(3, 3), CV_8UC1);
+    // matrix = (1, 1, 1, 1, 5, 1, 1, 8, 7);
+    matrix.col(0) = 1;
+    matrix.col(1) = 2;
+    matrix.col(2) = 127;
+    cout << matrix << endl;
+    cv::Mat hist_info;
+    const int hist_size = 128;
+    float hist_range[] = {1, 128};
+    const float *hist_ranges[] = {hist_range};
+
+    const int chs = 0; // image channels
+
+    cv::calcHist(&matrix, 1, &chs, cv::Mat(), hist_info, 1, &hist_size, &hist_ranges[0]);
+    cout << hist_info << endl;
+}
+
+void convert_test()
+{
+    cv::Mat u2f = cv::Mat::zeros(cv::Size(3, 1), CV_8UC1);
+    u2f.col(0) = 1;
+    u2f.col(1) = 2;
+    u2f.col(2) = 127;
+    cout << "u2f  8UC1" << u2f << endl;
+    u2f.convertTo(u2f, CV_32FC1);
+    cout << "u2f 32FC1" << u2f << endl;
+
+        cv::Mat f2u = cv::Mat::zeros(cv::Size(3, 1), CV_16UC1);
+    f2u.col(0) = 0;
+    f2u.col(1) = 100;
+    f2u.col(2) = 10000;
+    cout << "f2u 32FC1" << f2u << endl;
+    f2u.convertTo(f2u, CV_8UC1);
+    cout << "f2u  8UC1" << f2u << endl;
+}
+
+string Type2String(int type)
+{
+	string strType;
+	uchar depth = type & CV_MAT_DEPTH_MASK;
+	uchar chans = 1 + (type >> CV_CN_SHIFT);
+	switch (depth) 
+	{
+		case CV_8U:  
+			strType = "CV_8U"; break;
+		case CV_8S:  
+			strType = "CV_8S"; break;
+		case CV_16U: 
+			strType = "CV_16U"; break;
+		case CV_16S: 
+			strType = "CV_16S"; break;
+		case CV_32S: 
+			strType = "CV_32S"; break;
+		case CV_32F: 
+			strType = "CV_32F"; break;
+		case CV_64F: 
+			strType = "CV_64F"; break;
+		default:  
+			strType = "UNKNOWN_TYPE"; break;
+	}
+	strType += "C";
+	strType += (chans + '0');
+ 
+	return strType;
 }
 
 int main()
@@ -161,5 +239,9 @@ int main()
     // rect_size_test();
     // moment_margin_0();
     // eigen_test();
-    mul_test();
+    // mul_test();
+    // meanstddev_test();
+    // calhist_test();
+    // convert_test();
+    cout<<Type2String(2)<<endl;
 }
