@@ -7,6 +7,7 @@
 #include <Eigen/Core>
 
 using namespace std;
+using namespace cv;
 
 /* GLOBAL DEFINES */
 #define MAT_ROWS 480 // 240  //800
@@ -251,9 +252,64 @@ void chessboardTest()
     // foundColor = cv::findChessboardCorners(colorDisp, boardDims, pointsColor, cv::CALIB_CB_FAST_CHECK);
     foundColor = cv::findChessboardCorners(colorDisp, boardDims, pointsColor);
     cout << foundColor << endl;
-          cv::cvtColor(colorDisp, colorDisp, CV_GRAY2BGR);
+    cv::cvtColor(colorDisp, colorDisp, CV_GRAY2BGR);
     cv::drawChessboardCorners(colorDisp, boardDims, pointsColor, foundColor);
     cv::imshow("chess color", colorDisp);
+}
+
+void calibTest()
+{
+    string root_path = "/home/free/catkin_kinect2/kinect_cal_data/";
+    string save_root_path = "/home/free/catkin_kinect2/draw_kinect2/";
+    int img_cnt = 101;
+
+
+    // string root_path = "/home/free/catkin_cd/celex_kinect_calib/";
+    // string save_root_path = "/home/free/catkin_cd/draw_celex_kinect_calib/";
+    // int img_cnt = 21;
+
+    // string img_type = "color";
+    string img_type = "ir";
+    // string img_type = "grey_ir";
+
+    const cv::TermCriteria termCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::COUNT, 100, DBL_EPSILON);
+
+    vector<string> image_path;
+    vector<string> save_path;
+    for (int i = 0; i < img_cnt; ++i)
+    {
+        stringstream ss, sc;
+        ss << root_path << "/" << img_type << "/" << setw(4) << setfill('0') << i << "_sync_" << img_type << ".png";
+        sc << save_root_path << "/" << img_type << "/" << setw(4) << setfill('0') << i << "_sync_" << img_type << ".png";
+
+        // cout << ss.str() << endl;
+
+        image_path.push_back(ss.str());
+        save_path.push_back(sc.str());
+    }
+
+    for (int i = 0; i < image_path.size(); ++i)
+    {
+        cv::Mat colorDisp = cv::imread(image_path[i], cv::IMREAD_GRAYSCALE);
+        // cout << colorDisp.channels() << endl;
+        // cv::imshow("chess color",colorDisp);
+
+        vector<cv::Point2f> pointsColor;
+        bool foundColor = true;
+        cv::Size boardDims = cv::Size(5, 7);
+        // foundColor = cv::findChessboardCorners(colorDisp, boardDims, pointsColor, cv::CALIB_CB_FAST_CHECK);
+        foundColor = cv::findChessboardCorners(colorDisp, boardDims, pointsColor);
+
+        cv::cornerSubPix(colorDisp, pointsColor, cv::Size(11, 11), cv::Size(-1, -1), termCriteria);
+
+        // cout << foundColor << endl;
+        cv::cvtColor(colorDisp, colorDisp, CV_GRAY2BGR);
+        cv::drawChessboardCorners(colorDisp, boardDims, pointsColor, foundColor);
+        cv::imshow("chess color", colorDisp);
+        waitKey(30);
+
+        imwrite(save_path[i], colorDisp);
+    }
 }
 
 int main()
@@ -270,7 +326,8 @@ int main()
     // calhist_test();
     // convert_test();
     // cout << Type2String(2) << endl;
-    chessboardTest();
+    // chessboardTest();
+    calibTest();
 
-    cv::waitKey(3000);
+    // cv::waitKey(3000);
 }
