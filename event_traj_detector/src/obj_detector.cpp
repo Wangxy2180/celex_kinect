@@ -181,6 +181,9 @@ void ObjDetector::edgeDetect()
         // 这里可以做一步操作吧，直接切出roi区域然后进行操作，可以省时间啊
         // 因为需要做全局优化吧，所以还是整体来搞比较好
         getEventCntImg(gray_image_);
+        static int cccnt=0;
+        if(cccnt==7)sleep(10);
+        cccnt++;
 
         /* initialize ROI convergence */
         cv::Rect ori_rect;

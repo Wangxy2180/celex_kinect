@@ -123,7 +123,8 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(${PROJECT_NAME}_node src/draw2d.cpp)
+# add_executable(${PROJECT_NAME}_node src/draw2d.cpp)
+add_executable(${PROJECT_NAME}_node src/celex_sub.cpp)
 
 target_link_libraries(${PROJECT_NAME}_node
     ${catkin_INCLUDE_DIRS}

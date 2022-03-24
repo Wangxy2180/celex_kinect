@@ -191,43 +191,69 @@ void convert_test()
     u2f.convertTo(u2f, CV_32FC1);
     cout << "u2f 32FC1" << u2f << endl;
 
-        cv::Mat f2u = cv::Mat::zeros(cv::Size(3, 1), CV_16UC1);
+    cv::Mat f2u = cv::Mat::zeros(cv::Size(3, 1), CV_16UC1);
     f2u.col(0) = 0;
     f2u.col(1) = 100;
     f2u.col(2) = 10000;
     cout << "f2u 32FC1" << f2u << endl;
-    f2u.convertTo(f2u, CV_8UC1);
+    f2u.convertTo(f2u, CV_8UC1, 1.0 / 256);
     cout << "f2u  8UC1" << f2u << endl;
 }
 
 string Type2String(int type)
 {
-	string strType;
-	uchar depth = type & CV_MAT_DEPTH_MASK;
-	uchar chans = 1 + (type >> CV_CN_SHIFT);
-	switch (depth) 
-	{
-		case CV_8U:  
-			strType = "CV_8U"; break;
-		case CV_8S:  
-			strType = "CV_8S"; break;
-		case CV_16U: 
-			strType = "CV_16U"; break;
-		case CV_16S: 
-			strType = "CV_16S"; break;
-		case CV_32S: 
-			strType = "CV_32S"; break;
-		case CV_32F: 
-			strType = "CV_32F"; break;
-		case CV_64F: 
-			strType = "CV_64F"; break;
-		default:  
-			strType = "UNKNOWN_TYPE"; break;
-	}
-	strType += "C";
-	strType += (chans + '0');
- 
-	return strType;
+    string strType;
+    uchar depth = type & CV_MAT_DEPTH_MASK;
+    uchar chans = 1 + (type >> CV_CN_SHIFT);
+    switch (depth)
+    {
+    case CV_8U:
+        strType = "CV_8U";
+        break;
+    case CV_8S:
+        strType = "CV_8S";
+        break;
+    case CV_16U:
+        strType = "CV_16U";
+        break;
+    case CV_16S:
+        strType = "CV_16S";
+        break;
+    case CV_32S:
+        strType = "CV_32S";
+        break;
+    case CV_32F:
+        strType = "CV_32F";
+        break;
+    case CV_64F:
+        strType = "CV_64F";
+        break;
+    default:
+        strType = "UNKNOWN_TYPE";
+        break;
+    }
+    strType += "C";
+    strType += (chans + '0');
+
+    return strType;
+}
+
+void chessboardTest()
+{
+    // cv::Mat colorDisp = cv::imread("../image_chess.png", cv::IMREAD_GRAYSCALE);
+    cv::Mat colorDisp = cv::imread("../image_chess_paper.png", cv::IMREAD_GRAYSCALE);
+    cout << colorDisp.channels() << endl;
+    // cv::imshow("chess color",colorDisp);
+
+    vector<cv::Point2f> pointsColor;
+    bool foundColor = true;
+    cv::Size boardDims = cv::Size(5, 7);
+    // foundColor = cv::findChessboardCorners(colorDisp, boardDims, pointsColor, cv::CALIB_CB_FAST_CHECK);
+    foundColor = cv::findChessboardCorners(colorDisp, boardDims, pointsColor);
+    cout << foundColor << endl;
+          cv::cvtColor(colorDisp, colorDisp, CV_GRAY2BGR);
+    cv::drawChessboardCorners(colorDisp, boardDims, pointsColor, foundColor);
+    cv::imshow("chess color", colorDisp);
 }
 
 int main()
@@ -243,5 +269,8 @@ int main()
     // meanstddev_test();
     // calhist_test();
     // convert_test();
-    cout<<Type2String(2)<<endl;
+    // cout << Type2String(2) << endl;
+    chessboardTest();
+
+    cv::waitKey(3000);
 }
