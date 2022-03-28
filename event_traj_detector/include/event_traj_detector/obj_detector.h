@@ -39,7 +39,7 @@ private:
 
   /* images */
   cv::Mat event_counts_;    // CV_8UC1
-  cv::Mat event_image_;     //  CV_32FC1
+  cv::Mat event_image_bin_;     //  CV_32FC1
   cv::Mat processed_image_; // init, CV_32FC1
   cv::Mat gray_image_;      // CV_8UC1
 
@@ -53,6 +53,12 @@ private:
 
   Eigen::Array<int, MAT_ROWS / BLOCK_SIZE, 1> block_rows;
   Eigen::Array<int, MAT_COLS / BLOCK_SIZE, 1> block_cols;
+
+  Eigen::Array<int, MAT_ROWS, 1> pixel_rows;
+  Eigen::Array<int, MAT_COLS, 1> pixel_cols;
+
+  float total_detect_time;
+  int total_detect_cnt;
 
   /* utilities */
 
@@ -69,7 +75,6 @@ private:
 
   void getBlockCenPoint(int &x_idx, int &y_idx);
 
-
   /* inline functions */
   inline void IntTruncate(const int &ref, double *value);
   inline void GetAverage(const cv::Mat m, double *avg, int *num);
@@ -81,6 +86,7 @@ private:
 
   void InitRoiByBlock(const cv::Point &p, cv::Rect *dst);
   void getEventCntImg(cv::Mat &cntImg);
+  void drawRectForThesis(const int idx,const cv::Rect& ori_rect);
 
 public:
   ObjDetector()
@@ -104,9 +110,9 @@ public:
   void edgeDetect();
   void LoadEdge(const Eigen::Array<int, MAT_ROWS / BLOCK_SIZE, 1> &rowVar,
                 const Eigen::Array<int, MAT_COLS / BLOCK_SIZE, 1> &colVar);
-
+  void LoadEdgePxiel(const Eigen::Array<int, MAT_ROWS, 1> &rowVar,
+                     const Eigen::Array<int, MAT_COLS, 1> &colVar);
   cv::Mat getEventVis();
-
 
   typedef std::unique_ptr<ObjDetector> Ptr;
 };

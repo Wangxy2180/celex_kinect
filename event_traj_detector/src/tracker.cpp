@@ -34,13 +34,13 @@ namespace tracker
         //       nh_.subscribe(k_img_raw_topic_, 1, &TrackSingleObj::ImageCallback, this);
         // 检测ROI区域
         events_sub_ =
-            nh_.subscribe(k_event_topic_, 30, &TrackSingleObj::EventsCallback, this);
+            nh_.subscribe(k_event_topic_, 3000, &TrackSingleObj::EventsCallback, this);
 
         //   imu_sub_ = nh_.subscribe(k_imu_topic_, 10, &TrackSingleObj::ImuCallback, this,
         //                            ros::TransportHints().tcpNoDelay());
         // 去ROI区域中读取深度数据
         depth_sub_ =
-            nh_.subscribe(k_depth_topic_, 1, &TrackSingleObj::DepthCallback, this);
+            nh_.subscribe(k_depth_topic_, 5, &TrackSingleObj::DepthCallback, this);
         // 动态补偿？
         //   odom_sub_ =
         //       nh_.subscribe(k_odometry_topic_, 10, &TrackSingleObj::OdometryCallback,
@@ -101,16 +101,11 @@ namespace tracker
         eventor_->generate();
 
         /* detect objects images */
-        cv::Mat event_image, event_count;
-        event_image = eventor_->GetEventImage();
+        cv::Mat event_image_bin, event_count;
+        event_image_bin = eventor_->GetEventImageBin();
         event_count = eventor_->GetEventCount();
 
-        {
-            // static int eventSaveCnt = 0;
-            // imwrite("/home/free/catkin_cd/src/celex_kinect/dataF/pureEvent/" + to_string(eventSaveCnt++) + ".jpg", event_image);
-        }
-
-        obj_detector_->LoadImages(event_count, event_image);
+        obj_detector_->LoadImages(event_count, event_image_bin);
 
         // obj_detector_->Detect();
 
@@ -120,10 +115,19 @@ namespace tracker
 
         eventor_->getEdgeBlock(rowBlock, colBlock);
         obj_detector_->LoadEdge(rowBlock, colBlock);
+
+        // {
+        //     Eigen::Array<int, MAT_ROWS, 1> rowPixel;
+        //     Eigen::Array<int, MAT_COLS, 1> colPixel;
+        //     eventor_->getEdgePixel(rowPixel, colPixel);
+        //     obj_detector_->LoadEdgePxiel(rowPixel, colPixel);
+        // }
+
         timer_.stop();
         std::cout << "callback before detect: " << timer_.getElapsedMilliseconds() << "ms\n";
 
         obj_detector_->edgeDetect();
+
         timer_.stop();
         std::cout << "callback end detect" << timer_.getElapsedMilliseconds() << "ms\n";
 
@@ -221,7 +225,7 @@ namespace tracker
             Visualize();
         if (isSave)
             saveRect();
-        cv::waitKey(1);
+        // cv::waitKey(1);
         // sleep(3);
         timer_.stop();
         std::cout << "===callback: " << timer_.getElapsedMilliseconds() << "ms\n";

@@ -18,6 +18,8 @@ roslaunch celex5_ros celex5_ros_node.launch
 roslaunch azure_kinect_ros_driver kinect_rgbd.launch
 ```
 
+
+# 标定须知
 标定中的color对应event camera(1280\*800)， ir对应 ir(640x576)[分辨率文档](https://docs.microsoft.com/zh-cn/azure/kinect-dk/hardware-specification),[标定代码文档](https://github.com/code-iai/iai_kinect2/tree/master/kinect2_calibration)
 
 标定代码中修改了
@@ -37,3 +39,36 @@ roslaunch azure_kinect_ros_driver kinect_rgbd.launch
 [解决方法](https://blog.csdn.net/CH_monsy/article/details/119391438):ros包中默认没有find_package(OpenCV)，你给他加上，然后给他link上就行了
 
 2. 使用kinect_rgbd.launch，彩色图分辨率720p
+
+# 录制的数据
+需录制事件数据、depth_raw
+celex为外部时间戳模式，时间为3ms
+```sh
+rosbag record \
+/celex5_mipi/events
+/rgb/image_raw \
+/rgb/image_rect_color \
+/depth/image_raw \
+/depth/image_rect \
+/depth_to_rgb/image_raw \
+
+#/ir/image_rect_ir \
+#/ir/image_rect_ir/compressed \
+#/rgb/image_raw/compressed \
+#/rgb/image_rect_color/compressed \
+#/depth/image_raw/compressed \
+#/depth_to_rgb/image_raw/compressed \
+```
+注意：`/depth/image_rect/compressed`会导致报错`Compressed Image Transport - JPEG compression requires 8/16-bit color format (input format is: 32FC1)`
+
+不报错组合
+```
+depth/image_raw
+depth_to_rgb/image
+ir/image_raw
+rgb/image_raw
+```
+
+
+修改存储文件
+搜索：(0)

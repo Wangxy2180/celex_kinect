@@ -85,9 +85,8 @@ private:
 
     cv::Mat depth_img_;
 
-
     /* image outputs */
-    cv::Mat event_img_;     // mean-time graph
+    cv::Mat event_img_bin_;    // mean-time graph
     cv::Mat event_counts_; // counts for event in each pixel
     cv::Mat color_img_;
 
@@ -120,9 +119,11 @@ private:
     // void UpdateFC2world();
     // void UpdateCam2body();
 
-
     Eigen::Array<int, MAT_ROWS / BLOCK_SIZE, 1> block_rows_eigen;
     Eigen::Array<int, MAT_COLS / BLOCK_SIZE, 1> block_cols_eigen;
+
+    Eigen::Array<int, MAT_ROWS, 1> pixel_rows_eigen;
+    Eigen::Array<int, MAT_COLS, 1> pixel_cols_eigen;
 
     /* inline functions */
     inline double ReadDepth(const cv::Mat &I, const int &x, const int &y);
@@ -146,6 +147,9 @@ public:
         block_cols_eigen.setZero();
         block_rows_eigen.setZero();
 
+        pixel_cols_eigen.setZero();
+        pixel_rows_eigen.setZero();
+
         env_window_.setZero();
     }
 
@@ -159,7 +163,10 @@ public:
     void Clear();
     void updateEdgeBlock(const int x, const int y);
     void getEdgeBlock(Eigen::Array<int, MAT_ROWS / BLOCK_SIZE, 1> &rowVar,
-                          Eigen::Array<int, MAT_COLS / BLOCK_SIZE, 1> &colVar);
+                      Eigen::Array<int, MAT_COLS / BLOCK_SIZE, 1> &colVar);
+
+    void getEdgePixel(Eigen::Array<int, MAT_ROWS, 1> &rowVar,
+                      Eigen::Array<int, MAT_COLS, 1> &colVar);
 
     void notCompensate(cv::Mat *timeImg, cv::Mat *eventCount);
     void translationalCompensate(cv::Mat *timeImg, cv::Mat *eventCount);
@@ -172,7 +179,7 @@ public:
     void LoadOdometry(const nav_msgs::Odometry::ConstPtr &odom);
     void LoadDepth(const cv::Mat &depth);
     void SetIMUType(const string &s);
-    cv::Mat GetEventImage(void) { return event_img_; }
+    cv::Mat GetEventImageBin(void) { return event_img_bin_; }
     cv::Mat GetEventCount(void) { return event_counts_; }
     cv::Mat GetVisualization(void);
 

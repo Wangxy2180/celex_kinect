@@ -1,6 +1,7 @@
 #include "event_traj_detector/eventor.h"
 
 #include "ros/ros.h"
+#include "timer.h"
 
 /**
  * @brief warp events and utilize motion compensation
@@ -10,14 +11,14 @@ void Eventor::generate()
 {
     Clear();
     // notCompensate(&time_img_, &event_counts_);
-    rotationalCompensate(&event_img_, &event_counts_);
+    rotationalCompensate(&event_img_bin_, &event_counts_);
 }
 
 void Eventor::Clear()
 {
     events_buffer_.clear();
 
-    event_img_ = cv::Mat::zeros(cv::Size(MAT_COLS, MAT_ROWS), CV_8UC1);
+    event_img_bin_ = cv::Mat::zeros(cv::Size(MAT_COLS, MAT_ROWS), CV_8UC1);
     event_counts_ = cv::Mat::zeros(cv::Size(MAT_COLS, MAT_ROWS), CV_8UC1);
 
     block_rows_eigen.setZero();
@@ -81,6 +82,9 @@ void Eventor::updateEdgeBlock(const int x, const int y)
 {
     block_rows_eigen[y / BLOCK_SIZE] += 1;
     block_cols_eigen[x / BLOCK_SIZE] += 1;
+
+    pixel_rows_eigen[y] += 1;
+    pixel_cols_eigen[x] += 1;
 }
 
 void Eventor::getEdgeBlock(Eigen::Array<int, MAT_ROWS / BLOCK_SIZE, 1> &rowVar,
@@ -90,15 +94,29 @@ void Eventor::getEdgeBlock(Eigen::Array<int, MAT_ROWS / BLOCK_SIZE, 1> &rowVar,
     colVar = block_cols_eigen;
 }
 
-void Eventor::rotationalCompensate(cv::Mat *eventImg, cv::Mat *eventCount)
+void Eventor::getEdgePixel(Eigen::Array<int, MAT_ROWS, 1> &rowVar,
+                           Eigen::Array<int, MAT_COLS, 1> &colVar)
 {
+    rowVar = pixel_rows_eigen;
+    colVar = pixel_cols_eigen;
+}
+
+void Eventor::rotationalCompensate(cv::Mat *eventImgBin, cv::Mat *eventCount)
+{
+    Timer timegen;
+    timegen.start();
     for (int i = 0; i < event_size_; i++)
     {
         celex5_msgs::Event e = events_buffer_[i];
 
+        // next three line only for throw1.bag
         // 这里要注意，celex数据xy是反的，x最大800，y最大1280
-        int ix = static_cast<int>(e.y);
-        int iy = static_cast<int>(MAT_ROWS - e.x);
+        // int ix = static_cast<int>(e.y);
+        // int iy = static_cast<int>(MAT_ROWS - e.x);
+
+        // 下边是正常数据集
+        int ix = static_cast<int>(e.x);
+        int iy = static_cast<int>(MAT_ROWS - e.y);
 
         if (IsWithinTheBoundary(ix, iy))
         {
@@ -109,10 +127,12 @@ void Eventor::rotationalCompensate(cv::Mat *eventImg, cv::Mat *eventCount)
             *c += 1;
 
             // 平均time_img
-            uchar *q = eventImg->ptr<uchar>(iy, ix);
+            uchar *q = eventImgBin->ptr<uchar>(iy, ix);
             *q = 255;
         }
     }
+    timegen.stop();
+    std::cout << "timegen: " << timegen.getElapsedMilliseconds() << "ms\n";
 }
 
 bool Eventor::updateEventWindow(int dataSize)

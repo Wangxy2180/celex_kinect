@@ -6,10 +6,10 @@
  * @param time_image
  */
 void ObjDetector::LoadImages(const cv::Mat &event_counts,
-                             const cv::Mat &event_image)
+                             const cv::Mat &event_image_bin)
 {
     event_counts_ = event_counts;
-    event_image_ = event_image;
+    event_image_bin_ = event_image_bin;
 }
 
 // void ObjDetector::Detect()
@@ -100,15 +100,17 @@ bool ObjDetector::isObjAppear(int &rowMaxIdx, int &colMaxIdx)
     // int rowMaxIdx, colMaxIdx;
     getBlockCenPoint(colMaxIdx, rowMaxIdx);
     // cout << "----" << colMaxIdx << "," << rowMaxIdx << endl;
-
     if (col_variance > 1000 && row_variance > 1000)
+    // if (col_variance > 100 && row_variance > 100)
     {
+        // 30ms 1000 is good
         if (block_rows[rowMaxIdx] > 1000 && block_cols[colMaxIdx] > 1000)
+        // if (block_rows[rowMaxIdx] > 500 && block_cols[colMaxIdx] > 500)
         {
             return true;
         }
     }
-    is_object_=false;
+    is_object_ = false;
     return false;
 }
 
@@ -122,16 +124,18 @@ void ObjDetector::InitRoiByBlock(const cv::Point &p, cv::Rect *dst)
 
 void ObjDetector::getEventCntImg(cv::Mat &cntImg)
 {
-    Timer timercnt;
-    timercnt.start();
+    Timer timerGenCnt;
+    timerGenCnt.start();
     // 简单的来说,就是对时间图归一化,然后用平均时间做阈值,进行01区分
     cv::Mat normed_event_image = cv::Mat::zeros(cv::Size(cntImg.cols, cntImg.rows), CV_8UC1);
 
-    cv::Mat tmpM;  // image matrix
-    cv::Mat tmpM2; // image matrix
+    cv::Mat tmpM; // image matrix
+    // cv::Mat tmpM2; // image matrix
 
     /* normalization */
     cv::normalize(event_counts_, normed_event_image, 0, 255, cv::NORM_MINMAX);
+    // cv::normalize(event_counts_, cntImg, 0, 255, cv::NORM_MINMAX);
+    // return;
     // cv::imshow("norm time", normed_event_image);
 
     //mean函数 mask只有0和1的区别，1就是参与运算，0就是不参与,不是权重
@@ -141,8 +145,10 @@ void ObjDetector::getEventCntImg(cv::Mat &cntImg)
     // 小于阈值为0，大于为原始值
     cv::threshold(normed_event_image, tmpM, thres, 1, cv::THRESH_TOZERO);
 
-    // 使用上边阈值的方法，rect更小，下边的方法，更稳定this is better吗
+    // // 使用上边阈值的方法，rect更小，下边的方法，更稳定this is better吗
     cv::threshold(normed_event_image, tmpM, 0, 255, cv::THRESH_OTSU);
+    // cv::threshold(normed_event_image, cntImg, 0, 255, cv::THRESH_OTSU);
+    // return;
 
     /* Gaussian Blur */
     cv::blur(tmpM, tmpM, cv::Size(5, 5));
@@ -155,17 +161,24 @@ void ObjDetector::getEventCntImg(cv::Mat &cntImg)
     // ///////////////////////////////////////
     // 开操作，先腐蚀再膨胀
     cv::morphologyEx(tmpM, tmpM, cv::MORPH_OPEN, kernel, cv::Point(-1, -1), 1);
-    timercnt.stop();
-    std::cout << "cnt img222: " << timercnt.getElapsedMilliseconds() << "ms\n";
+    // timercnt.stop();
+    // std::cout << "cnt img222: " << timercnt.getElapsedMilliseconds() << "ms\n";
     /* 图像按位平方，增加对比度 */
     // cv::imshow("morph", tmpM);
     cv::normalize(tmpM, cntImg, 0, 255, cv::NORM_MINMAX);
 
     // cv::imshow("gray", cntImg);
     // 时间图归一化了三次
+    if (1)
+    {
+        static int save_num = 0;
+        cv::imwrite("/home/free/catkin_cd/datasets/block_image/event_norm/" + to_string(save_num) + ".png", normed_event_image);
+        cv::imwrite("/home/free/catkin_cd/datasets/block_image/event_gray/" + to_string(save_num) + ".png", cntImg);
+        save_num++;
+    }
 
-    timercnt.stop();
-    std::cout << "cnt img: " << timercnt.getElapsedMilliseconds() << "ms\n";
+    timerGenCnt.stop();
+    std::cout << "generate cnt img: " << timerGenCnt.getElapsedMilliseconds() << "ms\n";
 }
 
 void ObjDetector::edgeDetect()
@@ -176,14 +189,12 @@ void ObjDetector::edgeDetect()
     // 满足方差条件才进行计算
 
     int rowMaxBlockIdx, colMaxBlockIdx;
-    if (isObjAppear(rowMaxBlockIdx, colMaxBlockIdx))
+    bool isAppear = isObjAppear(rowMaxBlockIdx, colMaxBlockIdx);
+    if (isAppear)
     {
         // 这里可以做一步操作吧，直接切出roi区域然后进行操作，可以省时间啊
         // 因为需要做全局优化吧，所以还是整体来搞比较好
         getEventCntImg(gray_image_);
-        static int cccnt=0;
-        if(cccnt==7)sleep(10);
-        cccnt++;
 
         /* initialize ROI convergence */
         cv::Rect ori_rect;
@@ -193,8 +204,12 @@ void ObjDetector::edgeDetect()
         InitRoiByBlock(max_loc, &ori_rect);
         GetRect(gray_image_, &ori_rect);
         // imshow("gray_cut",gray_image_(ori_rect));
-        test_mat.at<uchar>(rowMaxBlockIdx * BLOCK_SIZE, colMaxBlockIdx * BLOCK_SIZE) = 255;
-
+        // test_mat.at<uchar>(rowMaxBlockIdx * BLOCK_SIZE, colMaxBlockIdx * BLOCK_SIZE) = 255;
+        {
+            // cv::Mat init_roi_img;
+            // cv::rectangle(gray_image_, ori_rect, (255, 255, 255), 2);
+            // cv::imshow("init roi", gray_image_);
+        }
         ////////////////////////////////unused/////////////////////////////////////////////////////
         // cv::Mat iter_mat_;
         // cv::blur(gray_image_, iter_mat_, cv::Size(5, 5));
@@ -252,11 +267,32 @@ void ObjDetector::edgeDetect()
             last_rect_.width = min_obj.width;
             last_rect_.height = min_obj.height;
         }
-        cv::rectangle(test_mat, last_rect_, cv::Scalar(255, 255, 255));
-        imshow("max_ele", test_mat);
+        if (1)
+        {
+            static int cccnt = 0;
+            drawRectForThesis(cccnt, ori_rect);
+            if (cccnt == 7)
+            {
+                // sleep(100);
+            }
+            cccnt++;
+            cv::rectangle(test_mat, last_rect_, cv::Scalar(255, 255, 255));
+            imshow("max_ele", test_mat);
+            cv::waitKey(1);
+        }
     }
     timeedge.stop();
-    std::cout << "edge detect: " << timeedge.getElapsedMilliseconds() << "ms\n";
+    if (isAppear)
+    {
+        std::cout << "edge detect: " << timeedge.getElapsedMilliseconds() << "ms\n";
+        // total_detect_time += timeedge.getElapsedMilliseconds();
+        // total_detect_cnt += 1;
+        // std::cout << "avg edge detect: " << total_detect_time / total_detect_cnt << "ms\n";
+    }
+    else
+    {
+        std::cout << "empty detect: " << timeedge.getElapsedMilliseconds() << "ms\n";
+    }
 }
 
 void ObjDetector::LoadEdge(const Eigen::Array<int, MAT_ROWS / BLOCK_SIZE, 1> &rowVar,
@@ -264,6 +300,15 @@ void ObjDetector::LoadEdge(const Eigen::Array<int, MAT_ROWS / BLOCK_SIZE, 1> &ro
 {
     block_rows = rowVar;
     block_cols = colVar;
+    // block_rows.assign(rowBloc.begin(), rowBloc.end());
+    // block_cols.assign(colBloc.begin(), colBloc.end());
+}
+
+void ObjDetector::LoadEdgePxiel(const Eigen::Array<int, MAT_ROWS, 1> &rowVar,
+                                const Eigen::Array<int, MAT_COLS, 1> &colVar)
+{
+    pixel_rows = rowVar;
+    pixel_cols = colVar;
     // block_rows.assign(rowBloc.begin(), rowBloc.end());
     // block_cols.assign(colBloc.begin(), colBloc.end());
 }
@@ -586,7 +631,7 @@ cv::Mat ObjDetector::getEventVis()
     // cv::applyColorMap(m, m_color, cv::COLORMAP_JET);
     if (is_object_)
     { // draw bounding box
-        m_event = event_image_;
+        m_event = event_image_bin_;
         cv::rectangle(m_event, last_rect_, cv::Scalar(255, 255, 255), 2, cv::LINE_8, 0);
     }
     return m_event;
@@ -675,17 +720,29 @@ inline bool ObjDetector::IsTrue(const cv::Rect &curRect, const cv::Rect &lastRec
            thres;
 }
 
-// /**
-//  * @brief Debug
-//  * @param src image to visualize
-//  */
-// void ObjDetector::DebugVisualize(const cv::Mat &src)
-// {
-//     cv::Mat m, m_color;
-//     cv::normalize(src, m, 0, 255, cv::NORM_MINMAX);
-//     m.convertTo(m, CV_8UC1);
-//     cv::applyColorMap(m, m_color, cv::COLORMAP_JET);
-//     cv::namedWindow("visualize");
-//     cv::imshow("window", m_color);
-//     cv::waitKey(0);
-// }
+void ObjDetector::drawRectForThesis(const int idx, const cv::Rect &ori_rect)
+{
+
+    {
+        // cout << block_rows << endl
+        //      << "--------------" << endl
+        //      << block_cols << endl;
+        // cout << "=================================" << endl;
+        // cout << pixel_rows << endl
+        //      << "--------------" << endl
+        //      << pixel_cols << endl;
+    }
+    cv::Mat image_draw_init_roi;
+    cv::cvtColor(gray_image_, image_draw_init_roi, CV_GRAY2RGB);
+    cv::rectangle(image_draw_init_roi, ori_rect, cv::Scalar(0, 255, 0), 3);
+    cv::imwrite("/home/free/catkin_cd/datasets/block_image/image_init_roi/" + to_string(idx) + ".png", image_draw_init_roi);
+
+    cv::cvtColor(gray_image_, image_draw_init_roi, CV_GRAY2RGB);
+    cv::rectangle(image_draw_init_roi, last_rect_, cv::Scalar(0, 255, 0), 3);
+    cv::imwrite("/home/free/catkin_cd/datasets/block_image/image_final_roi/" + to_string(idx) + ".png", image_draw_init_roi);
+
+    cv::cvtColor(event_image_bin_, image_draw_init_roi, CV_GRAY2RGB);
+    cv::imwrite("/home/free/catkin_cd/datasets/block_image/event_bin/" + to_string(idx) + ".png", event_image_bin_);
+    cv::rectangle(image_draw_init_roi, last_rect_, cv::Scalar(0, 255, 0), 3);
+    cv::imwrite("/home/free/catkin_cd/datasets/block_image/event_bin_final_roi/" + to_string(idx) + ".png", image_draw_init_roi);
+}

@@ -49,28 +49,40 @@ void copy_assign()
     cout << b[1] << endl;
 
     vector<int> c;
-    for(int i = 0;i<3;++i)
+    for (int i = 0; i < 3; ++i)
     {
         vector<int> a{1, 2, 3, 4, 5};
-        b.assign(a.begin(),a.end());
+        b.assign(a.begin(), a.end());
     }
-    cout<<b.size()<<endl;
+    cout << b.size() << endl;
+}
+
+void reserve_test()
+{
+    vector<int> a;
+    a.reserve(10);
+    cout << a.size() << endl;
+    cout << a.capacity() << endl;
+    a.push_back(1);
+    cout << a.size() << endl;
+    cout << a.capacity() << endl;
 }
 
 void clear_test()
 {
     vector<int> aa;
-    cout<<"1:"<<aa.size()<<endl;
+    cout << "1:" << aa.size() << endl;
     aa.resize(10);
-    cout<<"2:"<<aa.size()<<endl;
+    cout << "2:" << aa.size() << endl;
     fill(aa.begin(), aa.end(), 0);
-    cout<<"3:"<<aa.size()<<endl;
+    cout << "3:" << aa.size() << endl;
 }
 
 int main()
 {
     // default_val();
     // min_ele_lam();
-    copy_assign();
+    // copy_assign();
     // clear_test();
+    reserve_test();
 }
